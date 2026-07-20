@@ -1,0 +1,19 @@
+Source: adaptation-samsung-r7
+Maintainer: Yunus Tan <yunus.tan@outlook.com.tr>
+Section: metapackages
+Priority: optional
+Build-Depends: debhelper (>= 10),
+               debhelper-compat (= 13),
+Standards-Version: 4.5.0.3
+
+Package: adaptation-samsung-r7
+Architecture: arm64
+Depends: ${misc:Depends},
+         adaptation-hybris-api33-phone,
+         adaptation-samsung-r7-configs (= ${binary:Version}),
+Description: Community adaptation for samsung-r7 - metapackage
+
+Package: adaptation-samsung-r7-configs
+Architecture: arm64
+Depends: ${misc:Depends},
+Description: Community adaptation for samsung-r7 - adaptation configurations
