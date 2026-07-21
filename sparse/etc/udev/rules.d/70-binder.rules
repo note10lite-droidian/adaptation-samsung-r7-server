@@ -1,0 +1,13 @@
+# Android binder cihazlari: HIDL HAL'leri (gralloc, hwcomposer) hwbinder
+# uzerinden konusur. phoc/phosh root olmayan kullanici (droidian) olarak
+# calistigi icin bunlar erisilebilir olmali. Gercek Android'de ueventd
+# bunlari zaten 0666 yapar; Droidian'da udev'in yapmasi gerekiyor.
+KERNEL=="binder",    MODE="0666"
+KERNEL=="hwbinder",  MODE="0666"
+KERNEL=="vndbinder", MODE="0666"
+
+# Waydroid icin ayri binder dugumleri (kernel: CONFIG_ANDROID_BINDER_DEVICES).
+# Halium container orijinal uculu kullanir, Waydroid bunlari alir.
+KERNEL=="anbox-binder",    MODE="0666"
+KERNEL=="anbox-hwbinder",  MODE="0666"
+KERNEL=="anbox-vndbinder", MODE="0666"
