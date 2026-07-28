@@ -1,0 +1,141 @@
+Description: Status bar saatini punch-hole/on-kamera ile cakismayacak sekilde yonlendirmeye gore konumlandir
+ Bu cihazda (SM-N770F, on kamera ust-orta punch-hole) gmobile'de eslesen bir
+ display-panel yok (device-tree compatible stringleri "samsung,armv8" /
+ "samsung,exynos9810" cok jenerik, cihaza ozel degil). Bu yuzden upstream'in
+ cutout-farkinda saat konumlandirma mekanizmasi (layout-manager.c'deki
+ PhoshLayoutManager->panel/get_clock_pos) hicbir zaman calismiyor ve saat
+ varsayilan olarak merkezde kalip on kameranin altina denk geliyordu.
+ .
+ Cozum, upstream'in cutout mekanizmasini degistirmek yerine (kesin kesim
+ geometrisi bilinmedigi icin gereksiz), saati dogrudan .ui'de status_icons_box
+ icine, pil ikonunun hemen soluna sabit yerlestiriyor (dikey/varsayilan durum)
+ ve top-panel.c'de PhoshMonitor transform'una gore (panel genisligi degil -
+ bu cihazda olcek/ppi hesaplamasi yuzunden guvenilmez) yatay modda saati
+ box_top_bar'in ortasina tasiyor. PhoshStatusIconsBox kendi ozel
+ GtkContainer'i oldugundan (GPtrArray tabanli, append hep index 0'a
+ prepend eder, her cocugu bir GtkRevealer'a sarar) sira ve ancestor kontrolu
+ buna gore ele alindi (bkz. yorumlar).
+ .
+ Kok neden analizi ve reddedilen alternatifler (ozel width-esigi kodu,
+ gmobile display-panel.json uydurma) icin: device-info/GUNLUK.md G26.6.
+Author: Yunus Tan <yunus.tan@outlook.com.tr>
+Origin: downstream, r7 (SM-N770F) Droidian port
+Forwarded: no
+Last-Update: 2026-07-27
+---
+diff --git a/src/ui/top-panel.ui b/src/ui/top-panel.ui
+index 2b45e03..15ed354 100644
+--- a/src/ui/top-panel.ui
++++ b/src/ui/top-panel.ui
+@@ -266,16 +266,6 @@
+                       </object>
+                       <!-- box_network -->
+                     </child>
+-                    <child type="center">
+-                      <object class="GtkLabel" id="lbl_clock">
+-                        <property name="visible">1</property>
+-                        <property name="margin-top">2</property>
+-                        <property name="label">00:00</property>
+-                        <style>
+-                          <class name="phosh-topbar-clock"/>
+-                        </style>
+-                      </object>
+-                    </child>
+                     <child>
+                       <object class="GtkBox" id="box_indicators">
+                         <property name="visible">1</property>
+@@ -322,6 +312,23 @@
+                                 <property name="child">location_info</property>
+                               </object>
+                             </child>
++                            <!-- r7: saat buraya, pil ikonunun hemen soluna
++                                 eklendi (m.20). status_icons_box hexpand=1
++                                 + kendi ic "align=end" mantigiyla saga
++                                 yasliyor; saat box_top_bar'da AYRI bir
++                                 kardes olsaydi bu genislemeye katilmiyor,
++                                 solda dogal boyutunda kalip pilden kopuk
++                                 gorunuyordu. GUNLUK G26.6. -->
++                            <child>
++                              <object class="GtkLabel" id="lbl_clock">
++                                <property name="visible">1</property>
++                                <property name="margin-top">2</property>
++                                <property name="label">00:00</property>
++                                <style>
++                                  <class name="phosh-topbar-clock"/>
++                                </style>
++                              </object>
++                            </child>
+                             <child>
+                               <object class="PhoshBatteryInfo" id="batteryinfo">
+                                 <property name="visible">1</property>
+diff --git a/src/top-panel.c b/src/top-panel.c
+index 974e800..18fad9b 100644
+--- a/src/top-panel.c
++++ b/src/top-panel.c
+@@ -827,6 +827,57 @@ on_configure_event (PhoshTopPanel *self, GdkEventConfigure *event)
+ }
+ 
+ 
++static void
++reposition_clock (PhoshTopPanel *self)
++{
++  /* r7: Bu cihazda gmobile'de eslesen bir display-panel yok (device-tree
++   * compatible stringleri cok jenerik), yani upstream'in cutout-farkinda
++   * saat konumlandirmasi (layout-manager.c) hic calismiyor. Portre modda
++   * saat status_icons_box icinde sabit (pilin hemen solunda, .ui'de
++   * yerlestirildi, dogrulandi). Yatay modda on kamera kenara kaydigindan
++   * saati box_top_bar'in ortasina tasiyoruz. Yon tespiti icin panel
++   * genisligi degil PhoshMonitor transform kullaniliyor (genislik, cihazin
++   * olcek/ppi hesaplamasi yuzunden guvenilir degil).
++   *
++   * PhoshStatusIconsBox kendi ozel GtkContainer'i (GPtrArray tabanli,
++   * append hep index 0'a prepend eder) oldugundan, portre moda donuste
++   * sirayi korumak icin batteryinfo'yu clock'tan SONRA yeniden ekliyoruz;
++   * boylece pil tekrar en kenara, saat hemen soluna gelir. GUNLUK G26.6. */
++  PhoshMonitor *monitor = phosh_shell_get_primary_monitor (phosh_shell_get_default ());
++  gboolean landscape = monitor && phosh_monitor_transform_is_tilted (phosh_monitor_get_transform (monitor));
++  GtkWidget *parent = gtk_widget_get_parent (self->lbl_clock);
++  /* r7: phosh_status_icons_box_append() cocugu kendi ozel GtkRevealer
++   * sarmalayicisina koyuyor, yani lbl_clock'un DOGRUDAN ebeveyni
++   * status_icons_box degil o revealer oluyor - "status_icons_box icinde
++   * mi?" kontrolunu get_ancestor ile (sarmalayiciyi atlayarak) yapmak
++   * gerekiyor. */
++  gboolean in_status_icons = (gtk_widget_get_ancestor (self->lbl_clock, PHOSH_TYPE_STATUS_ICONS_BOX) ==
++                              GTK_WIDGET (self->status_icons_box));
++
++  if (landscape) {
++    if (!in_status_icons)
++      return;
++
++    g_object_ref (self->lbl_clock);
++    phosh_status_icons_box_remove (self->status_icons_box, self->lbl_clock);
++    gtk_box_set_center_widget (GTK_BOX (self->box_top_bar), self->lbl_clock);
++    g_object_unref (self->lbl_clock);
++  } else {
++    if (parent != self->box_top_bar)
++      return;
++
++    g_object_ref (self->lbl_clock);
++    g_object_ref (self->batteryinfo);
++    gtk_box_set_center_widget (GTK_BOX (self->box_top_bar), NULL);
++    phosh_status_icons_box_remove (self->status_icons_box, self->batteryinfo);
++    phosh_status_icons_box_append (self->status_icons_box, self->lbl_clock);
++    phosh_status_icons_box_append (self->status_icons_box, self->batteryinfo);
++    g_object_unref (self->batteryinfo);
++    g_object_unref (self->lbl_clock);
++  }
++}
++
++
+ static void
+ phosh_top_panel_configured (PhoshLayerSurface *layer_surface)
+ {
+@@ -837,6 +888,8 @@ phosh_top_panel_configured (PhoshLayerSurface *layer_surface)
+ 
+   g_debug ("%s: %dx%d", __func__, width, height);
+ 
++  reposition_clock (PHOSH_TOP_PANEL (layer_surface));
++
+   PHOSH_LAYER_SURFACE_CLASS (phosh_top_panel_parent_class)->configured (layer_surface);
+ }
+ 

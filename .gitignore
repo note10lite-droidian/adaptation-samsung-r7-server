@@ -1,0 +1,10 @@
+# debuild output
+debian/files
+debian/*.substvars
+debian/*.debhelper
+debian/*.debhelper.log
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/adaptation-samsung-r7/
+debian/adaptation-samsung-r7-configs/
+debian/tmp/

@@ -1,0 +1,311 @@
+Description: r7 (SM-N770F) kamera yonelim + video kayit duzeltmeleri
+ Dort sorun cozuldu (biri kismi):
+ .
+ 1) Preview rotasyon takilmasi: yatay->dikey donuste kamera preview yatayda
+    takili kaliyordu. Bu compositor'da (phoc) QScreen.orientation guncellenmez
+    (output kompozisyon aninda doner, client habersiz) -> Qt VideoOutput.
+    autoOrientation calismaz ve donuste sifirlanmayan bir yonelim uygular.
+    autoOrientation=false + yonelim acikca QtSensors OrientationSensor (iio-sensor-
+    proxy backend) ile suruluyor: VideoOutput.orientation = -(compositor transform):
+    code 4(RightUp,t270)->+90, 3(LeftUp)->-90, 2(TopDown)->180, dikey->0.
+ .
+ 2) Yatayda cekilen foto portrait kaydoluyordu. CaptureFilter kareyi VideoOutput.
+    orientation'dan (yalnizca goruntuleme) once aldigindan yonelim gomulmuyordu.
+    CaptureFilter'a rotation ozelligi eklendi; QImage -viewfinder.orientation ile
+    dondurulup kaydediliyor (QTransform CW, VideoOutput CCW -> negatif).
+ .
+ 3) Video kayit siyah: kayit dizini outputPath ile ayni MoviesLocation'dan turetilip
+    olusturuluyor (yeni FileManager.createDirectoryAbsolute). Eski kod home-relative
+    "/Videos/droidian-camera" olusturuyordu ama outputPath MoviesLocation kullaniyordu;
+    XDG_VIDEOS_DIR="$HOME/" oldugundan dizinler uyusmuyor, filesink patliyor -> tum
+    pipeline error -> preview siyah + kayit bos.
+ .
+ 4) (Kismi) Video thumbnail siyah: ThumbnailGenerator manuel bits()+imageFormat...
+    yerine QVideoFrame::image() kullaniyor. Ancak bu cihazda video oynatma donanim-
+    decode (Halium droid codec); kareler CPU'dan erisilemedigi icin oynat-probe
+    yontemi thumbnail uretemez. BILINEN SINIR: video thumbnaili siyah kalir. Dogru
+    cozum record-time thumbnail (preview karesinden) -- ertelendi. Kayit+oynatma tam calisir.
+ .
+ Kok neden ve olcumler: device-info/GUNLUK.md G25.3 (yonelim) ve G25.4 (video).
+Author: Yunus Tan <yunus.tan@outlook.com.tr>
+Origin: downstream, r7 (SM-N770F) Droidian port
+Forwarded: no
+Last-Update: 2026-07-26
+---
+diff --git a/debian/control b/debian/control
+index 04d5df5..478bedf 100644
+--- a/debian/control
++++ b/debian/control
+@@ -11,6 +11,7 @@ Build-Depends: cmake,
+                qttools5-dev-tools,
+                libz-dev,
+                qtmultimedia5-dev,
++               qml-module-qtsensors,
+                libgstreamer1.0-dev,
+                pkgconf
+ Standards-Version: 4.5.1
+@@ -22,6 +23,7 @@ Pre-Depends: ${misc:Pre-Depends}
+ Depends: ${misc:Depends},
+          ${shlibs:Depends},
+          qml-module-qtmultimedia,
++         qml-module-qtsensors,
+          libqt5multimedia5-plugins, 
+          qml-module-qtquick2, 
+          qml-module-qtquick-controls2, 
+diff --git a/debian/rules b/debian/rules
+old mode 100644
+new mode 100755
+diff --git a/src/capturefilter.cpp b/src/capturefilter.cpp
+index a0bc0a5..c92ce3a 100644
+--- a/src/capturefilter.cpp
++++ b/src/capturefilter.cpp
+@@ -12,6 +12,7 @@
+ #include <QDateTime>
+ #include <QStandardPaths>
+ #include <QCoreApplication>
++#include <QTransform>
+ 
+ QVideoFrame MyFilterRunnable::run(QVideoFrame *input, const QVideoSurfaceFormat &surfaceFormat, RunFlags flags) {
+     Q_UNUSED(surfaceFormat);
+@@ -28,7 +29,16 @@ QVideoFrame MyFilterRunnable::run(QVideoFrame *input, const QVideoSurfaceFormat
+         photoDir.cd("droidian-camera");
+ 
+         QString filename = "image" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmsszzz") + ".jpg";
+-        input->image().save(photoDir.filePath(filename));
++
++        // r7: yakalanan kareyi cihaz yonelimine gore dondur (preview ile ayni aci),
++        // boylece yatayda cekilen foto wide/landscape kaydolur, portrait kalmaz.
++        // Preview'deki VideoOutput.orientation yalnizca goruntuleme; kareye
++        // gomulmuyordu -> foto hep portrait cikiyordu.
++        QImage image = input->image();
++        if (m_rotation && *m_rotation != 0) {
++            image = image.transformed(QTransform().rotate(*m_rotation), Qt::SmoothTransformation);
++        }
++        image.save(photoDir.filePath(filename));
+ 
+         *m_capture = false;
+     }
+@@ -36,10 +46,10 @@ QVideoFrame MyFilterRunnable::run(QVideoFrame *input, const QVideoSurfaceFormat
+     return *input;
+ }
+ 
+-CaptureFilter::CaptureFilter() : m_capture(false) {}
++CaptureFilter::CaptureFilter() : m_capture(false), m_rotation(0) {}
+ 
+ QVideoFilterRunnable *CaptureFilter::createFilterRunnable() {
+-    return new MyFilterRunnable(&m_capture);
++    return new MyFilterRunnable(&m_capture, &m_rotation);
+ }
+ 
+ void CaptureFilter::capture() {
+diff --git a/src/capturefilter.h b/src/capturefilter.h
+index 02ada20..b5d2014 100644
+--- a/src/capturefilter.h
++++ b/src/capturefilter.h
+@@ -14,14 +14,20 @@
+ class MyFilter;
+ class MyFilterRunnable : public QVideoFilterRunnable {
+ public:
+-    MyFilterRunnable(bool *capture) : m_capture(capture) {}
++    // r7: m_rotation, yakalanan kareyi cihaz yonelimine gore dondurmek icin
++    // (preview VideoOutput.orientation yalnizca goruntuleme; kareye gomulmuyordu,
++    // bu yuzden yatayda cekilen foto portrait kaliyordu).
++    MyFilterRunnable(bool *capture, int *rotation) : m_capture(capture), m_rotation(rotation) {}
+     QVideoFrame run(QVideoFrame *input, const QVideoSurfaceFormat &surfaceFormat, RunFlags flags);
+ private:
+     bool *m_capture;
++    int *m_rotation;
+ };
+ 
+ class CaptureFilter : public QAbstractVideoFilter {
+     Q_OBJECT
++    // r7: QML'den ayni yonelim degeriyle beslenir (OrientationSensor koduna gore).
++    Q_PROPERTY(int rotation MEMBER m_rotation)
+ public:
+     CaptureFilter();
+     QVideoFilterRunnable *createFilterRunnable();
+@@ -30,4 +36,5 @@ signals:
+     void finished(QObject *result);
+ private:
+     bool m_capture;
++    int m_rotation;
+ };
+diff --git a/src/filemanager.cpp b/src/filemanager.cpp
+index 5b3a4de..fc515b9 100644
+--- a/src/filemanager.cpp
++++ b/src/filemanager.cpp
+@@ -25,6 +25,16 @@ void FileManager::createDirectory(const QString &path) {
+     }
+ }
+ 
++// r7: mutlak yolu oldugu gibi olusturur (home prepend yok). Video kayit dizini
++// outputPath ile ayni MoviesLocation'dan turetilir; boylece filesink daima gecerli
++// bir dizine yazar (siyah kayit sorununun kok nedeni: dizin yoktu).
++void FileManager::createDirectoryAbsolute(const QString &path) {
++    QDir dir;
++    if (!path.isEmpty() && !dir.exists(path)) {
++        dir.mkpath(path);
++    }
++}
++
+ void FileManager::removeGStreamerCacheDirectory() {
+     QString homePath = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
+     QString filePath = homePath + "/.cache/gstreamer-1.0/registry.aarch64.bin";
+diff --git a/src/filemanager.h b/src/filemanager.h
+index 89eb713..64d0892 100644
+--- a/src/filemanager.h
++++ b/src/filemanager.h
+@@ -19,6 +19,10 @@ public:
+     explicit FileManager(QObject *parent = nullptr);
+ 
+     Q_INVOKABLE void createDirectory(const QString &path);
++    // r7: mutlak yol icin (home prepend etmeden). Video cikti dizini outputPath ile
++    // AYNI kaynaktan (MoviesLocation) turetilip olusturulmali; eski createDirectory
++    // home-relative idi ve outputPath ile uyusmuyordu -> filesink patliyor, siyah kayit.
++    Q_INVOKABLE void createDirectoryAbsolute(const QString &path);
+     Q_INVOKABLE void removeGStreamerCacheDirectory();
+     Q_INVOKABLE QString getConfigFile();
+ };
+diff --git a/src/qml/main-gst.qml b/src/qml/main-gst.qml
+index 4f2b42f..e56944b 100644
+--- a/src/qml/main-gst.qml
++++ b/src/qml/main-gst.qml
+@@ -12,6 +12,7 @@ import QtQuick.Controls 2.15
+ import QtQuick.Window 2.12
+ import QtGraphicalEffects 1.0
+ import QtMultimedia 5.15
++import QtSensors 5.15
+ import QtQuick.Layouts 1.15
+ import Qt.labs.settings 1.0
+ import Qt.labs.platform 1.1
+@@ -109,14 +110,35 @@ ApplicationWindow {
+         }
+     }
+ 
++    OrientationSensor {
++        id: r7Orientation
++        active: true
++    }
++
+     VideoOutput {
+         id: viewfinder
+         anchors.fill: parent
+-        autoOrientation: true
++        // r7: QScreen bu compositor'da donuk -> Qt autoOrientation calismiyordu.
++        // autoOrientation kapali (donuste takilmayi onler) + yonelimi acikca
++        // iio-sensor-proxy'den (QtSensors) suruyoruz. Yatayda compositor pencereyi
++        // dondurunce video +90 fazla donuyordu; koda gore telafi ediyoruz.
++        autoOrientation: false
++        orientation: {
++            var o = r7Orientation.reading ? r7Orientation.reading.orientation : 1;
++            // orientation = -(compositor output transform); code=4(RightUp)
++            // olculen transform=270 -> orientation +90 iptal ediyor (deneyle dogrulandi).
++            if (o === 4) return 90;    // RightUp (yatay), transform 270
++            if (o === 3) return -90;   // LeftUp  (yatay), transform 90
++            if (o === 2) return 180;   // TopDown (ters dikey), transform 180
++            return 0;                  // TopUp (dikey) / tanimsiz
++        }  // r7 fix: video-yuzeyi yonelimi donuste sifirlanmiyordu (preview yatayda takili kaliyordu); sabit transform ile arayuzle simetrik doner, dikeyde videoflip 90r dik tutar
+ 
+         filters: [
+         CaptureFilter {
+                 id: capturer
++                // r7: yakalanan fotoyu preview ile ayni aciyla dondur (yatay foto
++                // wide kaydolsun). Yon yanlissa QML'de -viewfinder.orientation yap.
++                rotation: -viewfinder.orientation   // r7: QImage rotasyonu (CW) VideoOutput (CCW) ile ters yonde; negatif esitler
+             }
+         ]
+     }
+@@ -159,11 +181,20 @@ ApplicationWindow {
+             : backends[backendId].back
+         videoOutput: viewfinder
+         property var backendId: 0
+-        property string outputPath: StandardPaths.writableLocation(StandardPaths.MoviesLocation).toString().replace("file://","") +
+-                                            "/droidian-camera/video" + Qt.formatDateTime(new Date(), "yyyyMMdd_hhmmsszzz") + ".mkv"
++        // r7: video kayit dizini outputPath ile AYNI kaynaktan (MoviesLocation)
++        // turetilir ve olusturulur. Eski kod diri "/Videos/droidian-camera" (home-
++        // relative) olusturuyordu ama outputPath MoviesLocation kullaniyordu; XDG_
++        // VIDEOS_DIR="$HOME/" oldugundan MoviesLocation=home -> outputPath ~/droidian-
++        // camera'ya yaziyor, dizin yok -> filesink patliyor, siyah kayit.
++        property string videoDir: {
++            var m = StandardPaths.writableLocation(StandardPaths.MoviesLocation).toString().replace("file://","");
++            if (m.length > 0 && m.charAt(m.length - 1) === "/") m = m.substring(0, m.length - 1);
++            return m + "/droidian-camera";
++        }
++        property string outputPath: videoDir + "/video" + Qt.formatDateTime(new Date(), "yyyyMMdd_hhmmsszzz") + ".mkv"
+ 
+         Component.onCompleted: {
+-            fileManager.createDirectory("/Videos/droidian-camera");
++            fileManager.createDirectoryAbsolute(videoDir);
+         }
+ 
+         property var backends: [
+diff --git a/src/qml/main.qml b/src/qml/main.qml
+index 8408ef5..c3f810f 100644
+--- a/src/qml/main.qml
++++ b/src/qml/main.qml
+@@ -122,7 +122,7 @@ ApplicationWindow {
+         id: viewfinder
+         anchors.fill: parent
+         source: camera
+-        autoOrientation: true
++        autoOrientation: false  // r7 fix: video-yuzeyi yonelimi donuste sifirlanmiyordu (preview yatayda takili kaliyordu); sabit transform ile arayuzle simetrik doner, dikeyde videoflip 90r dik tutar
+ 
+         Rectangle {
+             id: focusPointRect
+diff --git a/src/thumbnailgenerator.cpp b/src/thumbnailgenerator.cpp
+index 3d2bf08..0ea2a22 100644
+--- a/src/thumbnailgenerator.cpp
++++ b/src/thumbnailgenerator.cpp
+@@ -14,6 +14,7 @@ ThumbnailGenerator::ThumbnailGenerator(QObject *parent) : QObject(parent) {
+ }
+ 
+ void ThumbnailGenerator::setVideoSource(const QString &videoSource) {
++    m_framesSeen = 0;
+     m_mediaPlayer.setMedia(QUrl(videoSource));
+     m_mediaPlayer.play();
+ }
+@@ -27,14 +28,22 @@ QString ThumbnailGenerator::toQmlImage(const QImage &image) {
+ 
+ void ThumbnailGenerator::processFrame(const QVideoFrame &frame) {
+     if (frame.isValid()) {
++        // r7: ilk kare(ler) siyah olabiliyor (kamera/encoder isinmasi) -> thumbnail
++        // siyah cikiyordu. Biraz ileriden kare al: pozisyon >=500ms VEYA guvenlik
++        // icin >=15 kare gorulunce. Yoksa erken kareyi atla, oynatma devam etsin.
++        ++m_framesSeen;
++        if (m_mediaPlayer.position() < 500 && m_framesSeen < 15) {
++            return;
++        }
+         QVideoFrame cloneFrame(frame);
+-        cloneFrame.map(QAbstractVideoBuffer::ReadOnly);
+-        QImage image(cloneFrame.bits(),
+-                     cloneFrame.width(),
+-                     cloneFrame.height(),
+-                     QVideoFrame::imageFormatFromPixelFormat(cloneFrame.pixelFormat()));
+-        emit thumbnailGenerated(image);
+-        m_mediaPlayer.stop();
+-        cloneFrame.unmap();
++        // r7: eski kod manuel bits()+imageFormatFromPixelFormat kullaniyordu; decode
++        // edilen kare YUV oldugunda imageFormatFromPixelFormat Format_Invalid donuyor
++        // -> QImage bos/siyah. QVideoFrame::image() (capturefilter'in kullandigi, foto
++        // renkli calisiyor) YUV->RGB donusumunu dogru yapar.
++        QImage image = cloneFrame.image();
++        if (!image.isNull()) {
++            emit thumbnailGenerated(image);
++            m_mediaPlayer.stop();
++        }
+     }
+ }
+diff --git a/src/thumbnailgenerator.h b/src/thumbnailgenerator.h
+index 44d0247..8dd067c 100644
+--- a/src/thumbnailgenerator.h
++++ b/src/thumbnailgenerator.h
+@@ -33,6 +33,9 @@ private slots:
+ private:
+     QMediaPlayer m_mediaPlayer;
+     QVideoProbe m_probe;
++    // r7: ilk kare(ler) siyah olabiliyor (kamera/encoder isinmasi); erken kareleri
++    // atlayip biraz ilerisinden thumbnail almak icin sayac.
++    int m_framesSeen = 0;
+ };
+ 
+ #endif // THUMBNAILGENERATOR_H

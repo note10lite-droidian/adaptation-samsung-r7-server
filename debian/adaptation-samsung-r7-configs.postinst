@@ -1,18 +1,19 @@
 #!/bin/sh
 set -e
 
-# r7: PulseAudio yapilandirmasini mevcut kullanicilara dagit.
+# r7: distribute the PulseAudio configuration to existing users.
 #
-# NEDEN GEREKLI: PA yalnizca ~/.config/pulse/default.pa ve /etc/pulse/default.pa
-# okur. Ikincisi pulseaudio-config-droid tarafindan divert edilmis durumda, yani
-# sahiplenemiyoruz. /etc/skel ise ise yaramiyor: rootfs uretiminde kullanici
-# (device.yaml -> droidian_phosh.yaml -> gsi_base -> setup-user.sh) BU PAKETTEN
-# ONCE olusuyor (device.yaml satir 16-18 vs 28-30), dolayisiyla skel uygulanmiyor.
+# WHY THIS IS NEEDED: PA only reads ~/.config/pulse/default.pa and
+# /etc/pulse/default.pa. The latter is diverted by pulseaudio-config-droid, so
+# we cannot claim it. /etc/skel does not help either: during rootfs generation
+# the user is created (device.yaml -> droidian_phosh.yaml -> gsi_base ->
+# setup-user.sh) BEFORE this package is unpacked (device.yaml lines 16-18 vs
+# 28-30), so skel is never applied.
 #
-# Sistem genelindeki /etc/pulse/arm_droid_card_custom.pa include noktasi da
-# kullanilamiyor: stok default.pa o include'dan SONRA module-droid-hidl yukluyor,
-# o da module_id=primary bekledigi icin "Couldn't get hw module functions" verip
-# PA'yi dbus assertion'inda cokertiyor.
+# The system-wide /etc/pulse/arm_droid_card_custom.pa include point is not
+# usable either: the stock default.pa loads module-droid-hidl AFTER that
+# include, and that module expects module_id=primary, so it fails with
+# "Couldn't get hw module functions" and takes PA down on a dbus assertion.
 
 SRC=/etc/skel/.config/pulse/default.pa
 
@@ -23,7 +24,7 @@ if [ "$1" = "configure" ] && [ -f "$SRC" ]; then
         id "$user" >/dev/null 2>&1 || continue
 
         dest="$home/.config/pulse/default.pa"
-        # Kullanici kendi dosyasini olusturmussa DOKUNMA
+        # If the user created their own file, LEAVE IT ALONE
         if [ ! -e "$dest" ]; then
             mkdir -p "$home/.config/pulse"
             cp "$SRC" "$dest"
@@ -32,10 +33,10 @@ if [ "$1" = "configure" ] && [ -f "$SRC" ]; then
     done
 fi
 
-# r7: Kamera backend'i. droidian-camera'nin varsayilani "aal" bu cihazda bozuk;
-# "gst" calisiyor. Dosya droidian-camera paketinin CONFFILE'i oldugu icin
-# sparse/ ile gonderilemez (dpkg "trying to overwrite" hatasi verir), bu yuzden
-# burada yerinde degistiriliyor.
+# r7: camera backend. droidian-camera defaults to "aal", which is broken on
+# this device; "gst" works. The file is a CONFFILE of the droidian-camera
+# package, so it cannot be shipped via sparse/ (dpkg would fail with "trying
+# to overwrite"); patch it in place instead.
 CAMCONF=/etc/droidian-camera.conf
 if [ "$1" = "configure" ] && [ -f "$CAMCONF" ]; then
     if grep -q '^backend=aal' "$CAMCONF"; then

@@ -1,4 +1,4 @@
-# Android grafik bellek ayiricisi. gralloc tum GPU tamponlarini buradan alir.
-# phoc root olmayan kullanici (droidian) olarak calistigi icin erisilebilir olmali.
-# Gercek Android da ueventd bunu 0666 yapar; Droidian da udev in yapmasi gerekiyor.
+# Android graphics memory allocator. gralloc takes every GPU buffer from here.
+# phoc runs as a non-root user (droidian), so it has to be reachable by that
+# user. On real Android ueventd makes this 0666; on Droidian udev has to.
 KERNEL=="ion", MODE="0666"

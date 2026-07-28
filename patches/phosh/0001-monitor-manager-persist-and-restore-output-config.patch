@@ -1,0 +1,180 @@
+Description: Persist and restore per-output configuration (scale/mode/transform)
+ Upstream phosh applies PERSISTENT ApplyMonitorsConfig requests to the compositor
+ but never writes them to disk, and does not restore any saved layout on start.
+ As a result, scale/transform/mode changes made from the Settings UI are lost on
+ every restart (a known gap shared by Mobian/postmarketOS).
+ .
+ This change serialises the applied per-head config to a GKeyFile
+ (~/.config/phosh/monitors.conf) in the PERSISTENT branch, and restores it once on
+ the first wlr-output-management "done" after start (heads are enumerated by then).
+ Heads without a saved entry keep their current state via clear_pending().
+Author: Yunus Tan <yunus.tan@outlook.com.tr>
+Origin: downstream, r7 (SM-N770F) Droidian port
+Forwarded: no
+Last-Update: 2026-07-22
+---
+diff --git a/src/monitor-manager.c b/src/monitor-manager.c
+index e7b416f..ced87ff 100644
+--- a/src/monitor-manager.c
++++ b/src/monitor-manager.c
+@@ -82,6 +82,7 @@ typedef struct _PhoshMonitorManager
+ 
+   PhoshHead *pending_primary;
+   uint32_t zwlr_output_serial;
++  gboolean                 config_restored;
+ 
+   GCancellable            *cancel;
+ } PhoshMonitorManager;
+@@ -93,6 +94,10 @@ G_DEFINE_TYPE_WITH_CODE (PhoshMonitorManager,
+                            PHOSH_DBUS_TYPE_DISPLAY_CONFIG,
+                            phosh_monitor_manager_display_config_init));
+ 
++/* r7: ekran yapilandirmasi (olcek/transform/mode) kaliciligi icin ileri bildirimler */
++static void phosh_monitor_manager_save_config (PhoshMonitorManager *self);
++static void phosh_monitor_manager_restore_config (PhoshMonitorManager *self);
++
+ 
+ static const double known_diagonals[] = {
+   12.1,
+@@ -825,6 +830,9 @@ phosh_monitor_manager_handle_apply_monitors_config (PhoshDBusDisplayConfig *skel
+ 
+     /* Apply new config */
+     phosh_monitor_manager_apply_monitor_config (self);
++
++    /* r7: yeniden baslatmada korunmasi icin diske yaz (upstream yazmiyordu) */
++    phosh_monitor_manager_save_config (self);
+   }
+ 
+   phosh_dbus_display_config_complete_apply_monitors_config (
+@@ -1113,6 +1121,12 @@ zwlr_output_manager_v1_handle_done (void                          *data,
+   self->zwlr_output_serial = serial;
+   self->serial++;
+ 
++  /* r7: kaydedilmis yapilandirmayi acilista bir kez geri yukle (head'ler artik enumere) */
++  if (!self->config_restored) {
++    self->config_restored = TRUE;
++    phosh_monitor_manager_restore_config (self);
++  }
++
+   phosh_dbus_display_config_emit_monitors_changed (PHOSH_DBUS_DISPLAY_CONFIG (self));
+ }
+ 
+@@ -1593,6 +1607,118 @@ phosh_monitor_manager_apply_monitor_config (PhoshMonitorManager *self)
+   zwlr_output_configuration_v1_apply (config);
+ }
+ 
++
++/*
++ * r7 downstream: ekran yapilandirmasi kaliciligi.
++ * Upstream phosh PERSISTENT ApplyMonitorsConfig'i phoc'a uyguluyor ama DISKE
++ * YAZMIYOR; acilista da geri yuklemiyor. Bu yuzden arayuzden yapilan olcek/
++ * transform/mode degisiklikleri yeniden baslatmada kayboluyordu (Mobian/pmOS'ta
++ * da ayni bilinen eksik). Cozum: GKeyFile ~/.config/phosh/monitors.conf.
++ */
++static char *
++phosh_monitor_manager_config_path (void)
++{
++  return g_build_filename (g_get_user_config_dir (), "phosh", "monitors.conf", NULL);
++}
++
++
++static PhoshHeadMode *
++phosh_head_find_mode_by_size (PhoshHead *head, int width, int height, int refresh)
++{
++  for (guint i = 0; i < head->modes->len; i++) {
++    PhoshHeadMode *mode = g_ptr_array_index (head->modes, i);
++    if (mode->width == width && mode->height == height && mode->refresh == refresh)
++      return mode;
++  }
++  return NULL;
++}
++
++
++/* Uygulanmis (pending) per-head config'i keyfile'a yaz. */
++static void
++phosh_monitor_manager_save_config (PhoshMonitorManager *self)
++{
++  g_autoptr (GKeyFile) kf = g_key_file_new ();
++  g_autoptr (GError) err = NULL;
++  g_autofree char *path = phosh_monitor_manager_config_path ();
++  g_autofree char *dir = g_path_get_dirname (path);
++
++  for (int i = 0; i < self->heads->len; i++) {
++    PhoshHead *head = g_ptr_array_index (self->heads, i);
++
++    if (head->name == NULL)
++      continue;
++
++    g_key_file_set_boolean (kf, head->name, "enabled", head->pending.enabled);
++    g_key_file_set_double (kf, head->name, "scale", head->pending.scale);
++    g_key_file_set_integer (kf, head->name, "transform", head->pending.transform);
++    g_key_file_set_integer (kf, head->name, "x", head->pending.x);
++    g_key_file_set_integer (kf, head->name, "y", head->pending.y);
++    if (head->pending.mode) {
++      g_key_file_set_integer (kf, head->name, "mode-width", head->pending.mode->width);
++      g_key_file_set_integer (kf, head->name, "mode-height", head->pending.mode->height);
++      g_key_file_set_integer (kf, head->name, "mode-refresh", head->pending.mode->refresh);
++    }
++  }
++
++  g_mkdir_with_parents (dir, 0700);
++  if (!g_key_file_save_to_file (kf, path, &err))
++    g_warning ("Failed to save monitor config to %s: %s", path, err->message);
++  else
++    g_debug ("Saved monitor config to %s", path);
++}
++
++
++/* Kaydedilmis config'i yukle ve yeniden uygula. Kaydi olmayan head'ler
++ * clear_pending sayesinde mevcut durumunu korur. */
++static void
++phosh_monitor_manager_restore_config (PhoshMonitorManager *self)
++{
++  g_autoptr (GKeyFile) kf = g_key_file_new ();
++  g_autofree char *path = phosh_monitor_manager_config_path ();
++  gboolean apply = FALSE;
++
++  if (!g_key_file_load_from_file (kf, path, G_KEY_FILE_NONE, NULL))
++    return;
++
++  phosh_monitor_manager_clear_pending (self);
++
++  for (int i = 0; i < self->heads->len; i++) {
++    PhoshHead *head = g_ptr_array_index (self->heads, i);
++    double scale;
++
++    if (head->name == NULL || !g_key_file_has_group (kf, head->name))
++      continue;
++
++    head->pending.enabled = g_key_file_get_boolean (kf, head->name, "enabled", NULL);
++    scale = g_key_file_get_double (kf, head->name, "scale", NULL);
++    if (scale > 0)
++      head->pending.scale = scale;
++    head->pending.transform = g_key_file_get_integer (kf, head->name, "transform", NULL);
++    head->pending.x = g_key_file_get_integer (kf, head->name, "x", NULL);
++    head->pending.y = g_key_file_get_integer (kf, head->name, "y", NULL);
++
++    if (g_key_file_has_key (kf, head->name, "mode-width", NULL)) {
++      PhoshHeadMode *mode = phosh_head_find_mode_by_size (
++        head,
++        g_key_file_get_integer (kf, head->name, "mode-width", NULL),
++        g_key_file_get_integer (kf, head->name, "mode-height", NULL),
++        g_key_file_get_integer (kf, head->name, "mode-refresh", NULL));
++      if (mode)
++        head->pending.mode = mode;
++    }
++
++    head->pending.seen = TRUE;
++    apply = TRUE;
++  }
++
++  if (apply) {
++    g_debug ("Restoring monitor config from %s", path);
++    phosh_monitor_manager_apply_monitor_config (self);
++  }
++}
++
++
+ void
+ phosh_monitor_manager_set_sensor_proxy_manager (PhoshMonitorManager     *self,
+                                                 PhoshSensorProxyManager *manager)

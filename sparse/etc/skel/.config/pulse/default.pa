@@ -1,17 +1,22 @@
-# GERCEK SES — hidl_compat kopru modulu
-# Samsung Android 13 te ses HAL i yalnizca binderized sunuluyor;
-# PA nin bekledigi passthrough HAL (audio.primary.default.so) 11 KB saplama.
-# audio.hidl_compat.default.so libaudiohal uzerinden binder servisine konusuyor.
-# Sart: android.hardware.audio.service calisiyor olmali (GSI init.disabled.rc kapatiyor).
-load-module module-droid-card module_id=hidl_compat config=/etc/pulse/droid/audio_policy_configuration.xml rate=48000
+# REAL AUDIO - the hidl_compat bridge module
+#
+# On Samsung's Android 13 the audio HAL is exposed only in binderized form;
+# the passthrough HAL PulseAudio expects (audio.primary.default.so) is an
+# 11 KB stub. audio.hidl_compat.default.so talks to the binder service
+# through libaudiohal instead.
+#
+# Requirement: android.hardware.audio.service must be running (the GSI
+# init.disabled.rc turns it off).
+load-module module-droid-card module_id=hidl_compat config=/etc/pulse/droid/audio_policy_configuration.xml rate=48000 voice_virtual_stream=true
 load-module module-native-protocol-unix
 load-module module-dbus-protocol
 load-module module-default-device-restore
 load-module module-always-sink
 load-module module-stream-restore
 
-# MIKROFON: droid-source.c kaynagi suspend_cause=PA_SUSPEND_IDLE ile olusturuyor
-# (droid-sink.c bunu YAPMIYOR — hoparlorun calisip mikrofonun calismamasinin sebebi).
-# Bu sebebi temizleyen tek modul budur; yuklenmezse kaynak kalici askida kalir
-# ve kayit 0 bayt uretir.
+# MICROPHONE: droid-source.c creates the source with
+# suspend_cause=PA_SUSPEND_IDLE (droid-sink.c does NOT - that is why the
+# speaker worked while the microphone did not). This is the only module that
+# clears that cause; without it the source stays suspended forever and
+# recording produces 0 bytes.
 load-module module-suspend-on-idle

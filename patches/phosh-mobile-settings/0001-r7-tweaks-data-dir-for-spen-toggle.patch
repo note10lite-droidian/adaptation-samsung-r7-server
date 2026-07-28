@@ -1,0 +1,153 @@
+Description: r7 (SM-N770F) S-Pen tablet/touch toggle'ini phosh-mobile-settings'te goster
+ Uc parca:
+ (1) debian/rules: tweaks-data-dir'i /usr/share/phosh-mobile-settings/tweaks yap
+     (droidian varsayilani ''), boylece sparse'daki tweaks/spen.yaml (org.droidian.spen
+     finger-mode toggle'i) Settings'te gorunur. .nobuiltins.desktop .install'a eklendi
+     (dh_missing).
+ (2) Configurable Tweaks sayfalarina opsiyonel "icon" alani (upstream'in
+     "TODO: Read icon from ... settings definitions" notunu tamamlar): parser'a
+     page->icon eklendi, ms-window.c sabit "conf-tweaks-symbolic" yerine sayfanin
+     ikonunu kullanir. S-Pen sayfasi input-tablet-symbolic (stylus) alir.
+ Uzerine build: droidian group/next/phosh-0.55 (commit 3fbecf5). Cihazda derlenir
+ (container'da libcellbroadcast-dev not installable). Kok neden: device-info/GUNLUK.md G26.4/G26.5.
+Author: Yunus Tan <yunus.tan@outlook.com.tr>
+Origin: downstream, r7 (SM-N770F) Droidian port
+Forwarded: no
+Last-Update: 2026-07-26
+---
+diff --git a/debian/changelog b/debian/changelog
+index ad7a43c..bbe3889 100644
+--- a/debian/changelog
++++ b/debian/changelog
+@@ -1,3 +1,12 @@
++phosh-mobile-settings (0.55.0+git20260527214851.3fbecf5.next.phosh.0.55+r7spen1) experimental; urgency=medium
++
++  * r7 (SM-N770F): tweaks-data-dir'i /usr/share/phosh-mobile-settings/tweaks yap
++    (droidian varsayilani bostu). Boylece S-Pen tablet/touch toggle'i (Configurable
++    Tweaks / tweaks/spen.yaml, org.droidian.spen finger-mode) Settings icinde gorunur.
++    GUNLUK G26.4.
++
++ -- Yunus Tan <yunus.tan@outlook.com.tr>  Sun, 26 Jul 2026 11:49:30 +0300
++
+ phosh-mobile-settings (0.55.0) experimental; urgency=medium
+ 
+   [ nicole mikołajczyk ]
+diff --git a/debian/phosh-mobile-settings.install b/debian/phosh-mobile-settings.install
+index 170047a..d726e17 100644
+--- a/debian/phosh-mobile-settings.install
++++ b/debian/phosh-mobile-settings.install
+@@ -8,3 +8,4 @@ usr/share/icons/hicolor/symbolic/apps/mobi.phosh.MobileSettings-symbolic.svg
+ usr/share/man/man1/phosh-mobile-settings.1
+ usr/share/metainfo/mobi.phosh.MobileSettings.metainfo.xml
+ usr/share/polkit-1/rules.d/phosh-mobile-settings.rules
++usr/share/applications/mobi.phosh.MobileSettings.nobuiltins.desktop
+diff --git a/debian/rules b/debian/rules
+index 9d7d725..09364f2 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -2,7 +2,7 @@
+ 
+ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+ 
+-MESON_OPTS=--wrap-mode=default -Dtweaks-data-dir=''
++MESON_OPTS=--wrap-mode=default -Dtweaks-data-dir='/usr/share/phosh-mobile-settings/tweaks'
+ 
+ ifeq ($(filter nodoc,$(DEB_BUILD_PROFILES)),)
+   MESON_OPTS+=-Dman=true
+diff --git a/src/conf-tweaks/ms-tweaks-parser.c b/src/conf-tweaks/ms-tweaks-parser.c
+index dcaf692..981c922 100644
+--- a/src/conf-tweaks/ms-tweaks-parser.c
++++ b/src/conf-tweaks/ms-tweaks-parser.c
+@@ -63,6 +63,7 @@ typedef enum {
+   MS_TWEAKS_STATE_PAGE,               /* Page entry. */
+   MS_TWEAKS_STATE_PAGE_NAME,          /* Page name. */
+   MS_TWEAKS_STATE_PAGE_WEIGHT,        /* Page weight. */
++  MS_TWEAKS_STATE_PAGE_ICON,          /* Page icon name. */
+ 
+   MS_TWEAKS_STATE_SECTION,            /* Section entry. */
+   MS_TWEAKS_STATE_SECTION_NAME,       /* Section name. */
+@@ -118,6 +119,7 @@ static const char *ms_tweaks_state[] = {
+   [MS_TWEAKS_STATE_PAGE] = "PAGE",
+   [MS_TWEAKS_STATE_PAGE_NAME] = "PAGE_NAME",
+   [MS_TWEAKS_STATE_PAGE_WEIGHT] = "PAGE_WEIGHT",
++  [MS_TWEAKS_STATE_PAGE_ICON] = "PAGE_ICON",
+ 
+   [MS_TWEAKS_STATE_SETTING] = "SETTING",
+   [MS_TWEAKS_STATE_SETTING_NAME] = "SETTING_NAME",
+@@ -242,6 +244,7 @@ ms_tweaks_page_copy (const MsTweaksPage *page)
+ 
+   new_page->weight = page->weight;
+   new_page->name = g_strdup (page->name);
++  new_page->icon = g_strdup (page->icon);
+   new_page->name_i18n = g_strdup (page->name_i18n);
+   if (page->section_table)
+     new_page->section_table = g_hash_table_ref (page->section_table);
+@@ -290,6 +293,7 @@ void
+ ms_tweaks_page_free (MsTweaksPage *page)
+ {
+   g_free (page->name);
++  g_free (page->icon);
+   g_free (page->name_i18n);
+ 
+   g_clear_pointer (&page->section_table, g_hash_table_unref);
+@@ -742,6 +746,8 @@ consume_event (MsTweaksParser *self, const yaml_event_t *event, GError **error)
+         self->state = MS_TWEAKS_STATE_PAGE_NAME;
+       else if (strcmp (prop_name, "weight") == 0)
+         self->state = MS_TWEAKS_STATE_PAGE_WEIGHT;
++      else if (strcmp (prop_name, "icon") == 0)
++        self->state = MS_TWEAKS_STATE_PAGE_ICON;
+       else if (strcmp (prop_name, "sections") == 0)
+         self->state = MS_TWEAKS_STATE_SECTION;
+       else {
+@@ -912,6 +918,21 @@ consume_event (MsTweaksParser *self, const yaml_event_t *event, GError **error)
+       return FALSE;
+     }
+     break;
++  case MS_TWEAKS_STATE_PAGE_ICON:
++    switch (event->type) {
++    case YAML_SCALAR_EVENT:
++      g_assert (self->current_page);
++
++      g_free (self->current_page->icon);
++      self->current_page->icon = g_strdup ((char *) event->data.scalar.value);
++      self->state = MS_TWEAKS_STATE_PAGE;
++      break;
++    default:
++      report_error (self->state, event, error);
++      remove_current_section (self);
++      return FALSE;
++    }
++    break;
+   case MS_TWEAKS_STATE_SECTION_NAME:
+     switch (event->type) {
+     case YAML_SCALAR_EVENT:
+diff --git a/src/conf-tweaks/ms-tweaks-parser.h b/src/conf-tweaks/ms-tweaks-parser.h
+index 45b9e95..3d4fc23 100644
+--- a/src/conf-tweaks/ms-tweaks-parser.h
++++ b/src/conf-tweaks/ms-tweaks-parser.h
+@@ -111,6 +111,7 @@ typedef struct {
+ typedef struct {
+   int weight;
+   char *name;
++  char *icon; /* Optional page icon name (e.g. an -symbolic icon). */
+   GHashTable *section_table; /* key: char *, value: MsTweaksSection * */
+ 
+   /* i18n properties. */
+diff --git a/src/ms-window.c b/src/ms-window.c
+index 53d2818..0ab9e51 100644
+--- a/src/ms-window.c
++++ b/src/ms-window.c
+@@ -104,8 +104,11 @@ add_ms_tweaks_page (gpointer value, gpointer user_data)
+     GtkStackPage *stack_page = gtk_stack_add_titled (self->stack,
+                                                      GTK_WIDGET (page_widget), page_data->name_i18n,
+                                                      page_data->name_i18n);
+-    /* TODO: Read icon from base64 property of settings definitions. */
+-    gtk_stack_page_set_icon_name (stack_page, "conf-tweaks-symbolic");
++    /* Per-page icon from the tweak definition's optional "icon" property;
++     * fall back to the generic conf-tweaks icon. */
++    gtk_stack_page_set_icon_name (stack_page,
++                                  (page_data->icon && *page_data->icon) ? page_data->icon
++                                                                        : "conf-tweaks-symbolic");
+   }
+ }
+ 
