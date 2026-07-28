@@ -1,15 +1,15 @@
-Description: r7 (SM-N770F) S-Pen tablet/touch toggle'ini phosh-mobile-settings'te goster
- Uc parca:
- (1) debian/rules: tweaks-data-dir'i /usr/share/phosh-mobile-settings/tweaks yap
-     (droidian varsayilani ''), boylece sparse'daki tweaks/spen.yaml (org.droidian.spen
-     finger-mode toggle'i) Settings'te gorunur. .nobuiltins.desktop .install'a eklendi
-     (dh_missing).
- (2) Configurable Tweaks sayfalarina opsiyonel "icon" alani (upstream'in
-     "TODO: Read icon from ... settings definitions" notunu tamamlar): parser'a
-     page->icon eklendi, ms-window.c sabit "conf-tweaks-symbolic" yerine sayfanin
-     ikonunu kullanir. S-Pen sayfasi input-tablet-symbolic (stylus) alir.
- Uzerine build: droidian group/next/phosh-0.55 (commit 3fbecf5). Cihazda derlenir
- (container'da libcellbroadcast-dev not installable). Kok neden: device-info/GUNLUK.md G26.4/G26.5.
+Description: Expose the r7 S Pen tablet/touch toggle in phosh-mobile-settings
+ Three parts:
+ (1) debian/rules: set tweaks-data-dir to /usr/share/phosh-mobile-settings/tweaks
+     (Droidian's default is ''), so that tweaks/spen.yaml shipped by the adaptation
+     package - the org.droidian.spen finger-mode toggle - shows up in Settings.
+     .nobuiltins.desktop added to .install for dh_missing.
+ (2) An optional "icon" property for Configurable Tweaks pages, completing
+     upstream's "TODO: Read icon from ... settings definitions" note: page->icon
+     is added to the parser, and ms-window.c uses the page's own icon instead of
+     the fixed "conf-tweaks-symbolic". The S Pen page gets input-tablet-symbolic.
+ Built on top of droidian group/next/phosh-0.55 (commit 3fbecf5). Must be built on
+ the device - libcellbroadcast-dev is not installable in the build container.
 Author: Yunus Tan <yunus.tan@outlook.com.tr>
 Origin: downstream, r7 (SM-N770F) Droidian port
 Forwarded: no
@@ -22,10 +22,10 @@ index ad7a43c..bbe3889 100644
 @@ -1,3 +1,12 @@
 +phosh-mobile-settings (0.55.0+git20260527214851.3fbecf5.next.phosh.0.55+r7spen1) experimental; urgency=medium
 +
-+  * r7 (SM-N770F): tweaks-data-dir'i /usr/share/phosh-mobile-settings/tweaks yap
-+    (droidian varsayilani bostu). Boylece S-Pen tablet/touch toggle'i (Configurable
-+    Tweaks / tweaks/spen.yaml, org.droidian.spen finger-mode) Settings icinde gorunur.
-+    GUNLUK G26.4.
++  * r7 (SM-N770F): set tweaks-data-dir to /usr/share/phosh-mobile-settings/tweaks
++    (Droidian's default was empty), so that the S Pen tablet/touch toggle
++    (Configurable Tweaks / tweaks/spen.yaml, org.droidian.spen finger-mode)
++    appears in Settings.
 +
 + -- Yunus Tan <yunus.tan@outlook.com.tr>  Sun, 26 Jul 2026 11:49:30 +0300
 +

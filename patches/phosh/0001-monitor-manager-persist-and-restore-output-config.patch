@@ -29,7 +29,7 @@ index e7b416f..ced87ff 100644
                             PHOSH_DBUS_TYPE_DISPLAY_CONFIG,
                             phosh_monitor_manager_display_config_init));
  
-+/* r7: ekran yapilandirmasi (olcek/transform/mode) kaliciligi icin ileri bildirimler */
++/* Forward declarations for output config persistence (scale/transform/mode). */
 +static void phosh_monitor_manager_save_config (PhoshMonitorManager *self);
 +static void phosh_monitor_manager_restore_config (PhoshMonitorManager *self);
 +
@@ -41,7 +41,7 @@ index e7b416f..ced87ff 100644
      /* Apply new config */
      phosh_monitor_manager_apply_monitor_config (self);
 +
-+    /* r7: yeniden baslatmada korunmasi icin diske yaz (upstream yazmiyordu) */
++    /* Persist across restarts; upstream never wrote this to disk. */
 +    phosh_monitor_manager_save_config (self);
    }
  
@@ -50,7 +50,7 @@ index e7b416f..ced87ff 100644
    self->zwlr_output_serial = serial;
    self->serial++;
  
-+  /* r7: kaydedilmis yapilandirmayi acilista bir kez geri yukle (head'ler artik enumere) */
++  /* Restore the saved config once at startup - heads are enumerated by now. */
 +  if (!self->config_restored) {
 +    self->config_restored = TRUE;
 +    phosh_monitor_manager_restore_config (self);
@@ -65,11 +65,11 @@ index e7b416f..ced87ff 100644
  
 +
 +/*
-+ * r7 downstream: ekran yapilandirmasi kaliciligi.
-+ * Upstream phosh PERSISTENT ApplyMonitorsConfig'i phoc'a uyguluyor ama DISKE
-+ * YAZMIYOR; acilista da geri yuklemiyor. Bu yuzden arayuzden yapilan olcek/
-+ * transform/mode degisiklikleri yeniden baslatmada kayboluyordu (Mobian/pmOS'ta
-+ * da ayni bilinen eksik). Cozum: GKeyFile ~/.config/phosh/monitors.conf.
++ * Downstream: output configuration persistence.
++ * Upstream phosh applies a PERSISTENT ApplyMonitorsConfig to phoc but never
++ * WRITES IT TO DISK, and never restores it at startup, so scale/transform/mode
++ * changes made from the UI were lost on every restart - a known gap shared with
++ * Mobian and postmarketOS. Fix: a GKeyFile at ~/.config/phosh/monitors.conf.
 + */
 +static char *
 +phosh_monitor_manager_config_path (void)
@@ -90,7 +90,7 @@ index e7b416f..ced87ff 100644
 +}
 +
 +
-+/* Uygulanmis (pending) per-head config'i keyfile'a yaz. */
++/* Write the applied (pending) per-head config out to the keyfile. */
 +static void
 +phosh_monitor_manager_save_config (PhoshMonitorManager *self)
 +{
@@ -125,8 +125,8 @@ index e7b416f..ced87ff 100644
 +}
 +
 +
-+/* Kaydedilmis config'i yukle ve yeniden uygula. Kaydi olmayan head'ler
-+ * clear_pending sayesinde mevcut durumunu korur. */
++/* Load the saved config and re-apply it. Heads with no saved entry keep
++ * their current state, via clear_pending(). */
 +static void
 +phosh_monitor_manager_restore_config (PhoshMonitorManager *self)
 +{

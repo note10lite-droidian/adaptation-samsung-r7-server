@@ -1,32 +1,35 @@
-Description: r7 (SM-N770F) kamera yonelim + video kayit duzeltmeleri
- Dort sorun cozuldu (biri kismi):
+Description: r7 (SM-N770F) camera orientation and video recording fixes
+ Four problems, one of them only partly:
  .
- 1) Preview rotasyon takilmasi: yatay->dikey donuste kamera preview yatayda
-    takili kaliyordu. Bu compositor'da (phoc) QScreen.orientation guncellenmez
-    (output kompozisyon aninda doner, client habersiz) -> Qt VideoOutput.
-    autoOrientation calismaz ve donuste sifirlanmayan bir yonelim uygular.
-    autoOrientation=false + yonelim acikca QtSensors OrientationSensor (iio-sensor-
-    proxy backend) ile suruluyor: VideoOutput.orientation = -(compositor transform):
-    code 4(RightUp,t270)->+90, 3(LeftUp)->-90, 2(TopDown)->180, dikey->0.
+ 1) Preview stuck in landscape: rotating landscape->portrait left the preview
+    in landscape. On this compositor (phoc) QScreen.orientation is never updated
+    - the output is rotated at composition time and the client is not told - so
+    Qt's VideoOutput.autoOrientation does not work and applies an orientation
+    that is never reset on rotation. Fixed by autoOrientation=false plus driving
+    the orientation explicitly from QtSensors OrientationSensor (iio-sensor-proxy
+    backend): VideoOutput.orientation = -(compositor transform), i.e.
+    code 4 (RightUp, t270)->+90, 3 (LeftUp)->-90, 2 (TopDown)->180, portrait->0.
  .
- 2) Yatayda cekilen foto portrait kaydoluyordu. CaptureFilter kareyi VideoOutput.
-    orientation'dan (yalnizca goruntuleme) once aldigindan yonelim gomulmuyordu.
-    CaptureFilter'a rotation ozelligi eklendi; QImage -viewfinder.orientation ile
-    dondurulup kaydediliyor (QTransform CW, VideoOutput CCW -> negatif).
+ 2) Photos taken in landscape were saved as portrait. CaptureFilter receives the
+    frame before VideoOutput.orientation, which only affects display, so the
+    orientation was never baked in. A rotation property was added to
+    CaptureFilter; the QImage is rotated by -viewfinder.orientation before saving
+    (QTransform rotates clockwise, VideoOutput counter-clockwise, hence negative).
  .
- 3) Video kayit siyah: kayit dizini outputPath ile ayni MoviesLocation'dan turetilip
-    olusturuluyor (yeni FileManager.createDirectoryAbsolute). Eski kod home-relative
-    "/Videos/droidian-camera" olusturuyordu ama outputPath MoviesLocation kullaniyordu;
-    XDG_VIDEOS_DIR="$HOME/" oldugundan dizinler uyusmuyor, filesink patliyor -> tum
-    pipeline error -> preview siyah + kayit bos.
+ 3) Video recordings came out black: the recording directory is now derived from
+    the same MoviesLocation as outputPath, and created (new
+    FileManager.createDirectoryAbsolute). The old code created a home-relative
+    "/Videos/droidian-camera" while outputPath used MoviesLocation, and since
+    XDG_VIDEOS_DIR="$HOME/" the two never matched. filesink then failed, taking
+    the whole pipeline down - black preview and an empty recording.
  .
- 4) (Kismi) Video thumbnail siyah: ThumbnailGenerator manuel bits()+imageFormat...
-    yerine QVideoFrame::image() kullaniyor. Ancak bu cihazda video oynatma donanim-
-    decode (Halium droid codec); kareler CPU'dan erisilemedigi icin oynat-probe
-    yontemi thumbnail uretemez. BILINEN SINIR: video thumbnaili siyah kalir. Dogru
-    cozum record-time thumbnail (preview karesinden) -- ertelendi. Kayit+oynatma tam calisir.
- .
- Kok neden ve olcumler: device-info/GUNLUK.md G25.3 (yonelim) ve G25.4 (video).
+ 4) (Partial) Black video thumbnails: ThumbnailGenerator now uses
+    QVideoFrame::image() instead of manual bits()+imageFormatFromPixelFormat.
+    However, video playback on this device is hardware-decoded (Halium droid
+    codec) and the frames are not CPU-accessible, so the play-and-probe approach
+    cannot produce a thumbnail at all. KNOWN LIMITATION: video thumbnails stay
+    black. The correct fix is a record-time thumbnail taken from the preview
+    frame; deferred. Recording and playback themselves work fully.
 Author: Yunus Tan <yunus.tan@outlook.com.tr>
 Origin: downstream, r7 (SM-N770F) Droidian port
 Forwarded: no
@@ -73,10 +76,10 @@ index a0bc0a5..c92ce3a 100644
          QString filename = "image" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmsszzz") + ".jpg";
 -        input->image().save(photoDir.filePath(filename));
 +
-+        // r7: yakalanan kareyi cihaz yonelimine gore dondur (preview ile ayni aci),
-+        // boylece yatayda cekilen foto wide/landscape kaydolur, portrait kalmaz.
-+        // Preview'deki VideoOutput.orientation yalnizca goruntuleme; kareye
-+        // gomulmuyordu -> foto hep portrait cikiyordu.
++        // Rotate the captured frame to match the device orientation (same angle
++        // as the preview), so a photo taken in landscape is saved wide instead
++        // of portrait. VideoOutput.orientation in the preview only affects
++        // display and was never baked into the frame.
 +        QImage image = input->image();
 +        if (m_rotation && *m_rotation != 0) {
 +            image = image.transformed(QTransform().rotate(*m_rotation), Qt::SmoothTransformation);
@@ -107,9 +110,9 @@ index 02ada20..b5d2014 100644
  class MyFilterRunnable : public QVideoFilterRunnable {
  public:
 -    MyFilterRunnable(bool *capture) : m_capture(capture) {}
-+    // r7: m_rotation, yakalanan kareyi cihaz yonelimine gore dondurmek icin
-+    // (preview VideoOutput.orientation yalnizca goruntuleme; kareye gomulmuyordu,
-+    // bu yuzden yatayda cekilen foto portrait kaliyordu).
++    // m_rotation rotates the captured frame to the device orientation. The
++    // preview's VideoOutput.orientation is display-only and was never baked
++    // into the frame, which is why landscape photos came out portrait.
 +    MyFilterRunnable(bool *capture, int *rotation) : m_capture(capture), m_rotation(rotation) {}
      QVideoFrame run(QVideoFrame *input, const QVideoSurfaceFormat &surfaceFormat, RunFlags flags);
  private:
@@ -119,7 +122,7 @@ index 02ada20..b5d2014 100644
  
  class CaptureFilter : public QAbstractVideoFilter {
      Q_OBJECT
-+    // r7: QML'den ayni yonelim degeriyle beslenir (OrientationSensor koduna gore).
++    // Fed from QML with the same orientation value the OrientationSensor gives.
 +    Q_PROPERTY(int rotation MEMBER m_rotation)
  public:
      CaptureFilter();
@@ -138,9 +141,9 @@ index 5b3a4de..fc515b9 100644
      }
  }
  
-+// r7: mutlak yolu oldugu gibi olusturur (home prepend yok). Video kayit dizini
-+// outputPath ile ayni MoviesLocation'dan turetilir; boylece filesink daima gecerli
-+// bir dizine yazar (siyah kayit sorununun kok nedeni: dizin yoktu).
++// Creates an absolute path as given, with no home prefix. The video recording
++// directory is derived from the same MoviesLocation as outputPath, so filesink
++// always writes somewhere that exists - a missing directory caused black recordings.
 +void FileManager::createDirectoryAbsolute(const QString &path) {
 +    QDir dir;
 +    if (!path.isEmpty() && !dir.exists(path)) {
@@ -159,9 +162,9 @@ index 89eb713..64d0892 100644
      explicit FileManager(QObject *parent = nullptr);
  
      Q_INVOKABLE void createDirectory(const QString &path);
-+    // r7: mutlak yol icin (home prepend etmeden). Video cikti dizini outputPath ile
-+    // AYNI kaynaktan (MoviesLocation) turetilip olusturulmali; eski createDirectory
-+    // home-relative idi ve outputPath ile uyusmuyordu -> filesink patliyor, siyah kayit.
++    // For absolute paths, without prefixing home. The video output directory must
++    // come from the SAME source as outputPath (MoviesLocation); the old
++    // createDirectory was home-relative and did not match -> filesink failed.
 +    Q_INVOKABLE void createDirectoryAbsolute(const QString &path);
      Q_INVOKABLE void removeGStreamerCacheDirectory();
      Q_INVOKABLE QString getConfigFile();
@@ -191,27 +194,27 @@ index 4f2b42f..e56944b 100644
          id: viewfinder
          anchors.fill: parent
 -        autoOrientation: true
-+        // r7: QScreen bu compositor'da donuk -> Qt autoOrientation calismiyordu.
-+        // autoOrientation kapali (donuste takilmayi onler) + yonelimi acikca
-+        // iio-sensor-proxy'den (QtSensors) suruyoruz. Yatayda compositor pencereyi
-+        // dondurunce video +90 fazla donuyordu; koda gore telafi ediyoruz.
++        // QScreen is frozen under this compositor, so Qt's autoOrientation did
++        // not work. It is disabled here (which also stops the preview sticking
++        // on rotation) and the orientation is driven explicitly from
++        // iio-sensor-proxy via QtSensors, compensating per orientation code.
 +        autoOrientation: false
 +        orientation: {
 +            var o = r7Orientation.reading ? r7Orientation.reading.orientation : 1;
-+            // orientation = -(compositor output transform); code=4(RightUp)
-+            // olculen transform=270 -> orientation +90 iptal ediyor (deneyle dogrulandi).
-+            if (o === 4) return 90;    // RightUp (yatay), transform 270
-+            if (o === 3) return -90;   // LeftUp  (yatay), transform 90
-+            if (o === 2) return 180;   // TopDown (ters dikey), transform 180
-+            return 0;                  // TopUp (dikey) / tanimsiz
-+        }  // r7 fix: video-yuzeyi yonelimi donuste sifirlanmiyordu (preview yatayda takili kaliyordu); sabit transform ile arayuzle simetrik doner, dikeyde videoflip 90r dik tutar
++            // orientation = -(compositor output transform). For code 4
++            // (RightUp) the measured transform is 270, so +90 cancels it out.
++            if (o === 4) return 90;    // RightUp (landscape), transform 270
++            if (o === 3) return -90;   // LeftUp  (landscape), transform 90
++            if (o === 2) return 180;   // TopDown (inverted portrait), transform 180
++            return 0;                  // TopUp (portrait) / unknown
++        }  // the video surface orientation was never reset on rotation, leaving the preview stuck in landscape; with a fixed transform it turns in step with the UI
  
          filters: [
          CaptureFilter {
                  id: capturer
-+                // r7: yakalanan fotoyu preview ile ayni aciyla dondur (yatay foto
-+                // wide kaydolsun). Yon yanlissa QML'de -viewfinder.orientation yap.
-+                rotation: -viewfinder.orientation   // r7: QImage rotasyonu (CW) VideoOutput (CCW) ile ters yonde; negatif esitler
++                // Rotate the captured photo by the same angle as the preview, so
++                // a landscape shot is saved wide.
++                rotation: -viewfinder.orientation   // QImage rotates clockwise, VideoOutput counter-clockwise; the negation matches them
              }
          ]
      }
@@ -221,11 +224,11 @@ index 4f2b42f..e56944b 100644
          property var backendId: 0
 -        property string outputPath: StandardPaths.writableLocation(StandardPaths.MoviesLocation).toString().replace("file://","") +
 -                                            "/droidian-camera/video" + Qt.formatDateTime(new Date(), "yyyyMMdd_hhmmsszzz") + ".mkv"
-+        // r7: video kayit dizini outputPath ile AYNI kaynaktan (MoviesLocation)
-+        // turetilir ve olusturulur. Eski kod diri "/Videos/droidian-camera" (home-
-+        // relative) olusturuyordu ama outputPath MoviesLocation kullaniyordu; XDG_
-+        // VIDEOS_DIR="$HOME/" oldugundan MoviesLocation=home -> outputPath ~/droidian-
-+        // camera'ya yaziyor, dizin yok -> filesink patliyor, siyah kayit.
++        // The video recording directory is derived from, and created at, the SAME
++        // source as outputPath (MoviesLocation). The old code created a home-relative
++        // "/Videos/droidian-camera" while outputPath used MoviesLocation; with
++        // XDG_VIDEOS_DIR="$HOME/" that resolves to home, so outputPath wrote to
++        // ~/droidian-camera, which did not exist -> filesink failed, black recording.
 +        property string videoDir: {
 +            var m = StandardPaths.writableLocation(StandardPaths.MoviesLocation).toString().replace("file://","");
 +            if (m.length > 0 && m.charAt(m.length - 1) === "/") m = m.substring(0, m.length - 1);
@@ -268,9 +271,9 @@ index 3d2bf08..0ea2a22 100644
  
  void ThumbnailGenerator::processFrame(const QVideoFrame &frame) {
      if (frame.isValid()) {
-+        // r7: ilk kare(ler) siyah olabiliyor (kamera/encoder isinmasi) -> thumbnail
-+        // siyah cikiyordu. Biraz ileriden kare al: pozisyon >=500ms VEYA guvenlik
-+        // icin >=15 kare gorulunce. Yoksa erken kareyi atla, oynatma devam etsin.
++        // The first frame(s) can be black while the camera/encoder warms up, so
++        // the thumbnail came out black. Take a frame slightly later: position
++        // >=500 ms, or >=15 frames seen as a safety net. Skip earlier ones.
 +        ++m_framesSeen;
 +        if (m_mediaPlayer.position() < 500 && m_framesSeen < 15) {
 +            return;
@@ -284,10 +287,10 @@ index 3d2bf08..0ea2a22 100644
 -        emit thumbnailGenerated(image);
 -        m_mediaPlayer.stop();
 -        cloneFrame.unmap();
-+        // r7: eski kod manuel bits()+imageFormatFromPixelFormat kullaniyordu; decode
-+        // edilen kare YUV oldugunda imageFormatFromPixelFormat Format_Invalid donuyor
-+        // -> QImage bos/siyah. QVideoFrame::image() (capturefilter'in kullandigi, foto
-+        // renkli calisiyor) YUV->RGB donusumunu dogru yapar.
++        // The old code used bits()+imageFormatFromPixelFormat manually. When the
++        // decoded frame is YUV, imageFormatFromPixelFormat returns Format_Invalid
++        // and the QImage comes out empty/black. QVideoFrame::image() - the same
++        // call CaptureFilter uses, where colour works - converts YUV->RGB properly.
 +        QImage image = cloneFrame.image();
 +        if (!image.isNull()) {
 +            emit thumbnailGenerated(image);
@@ -303,8 +306,8 @@ index 44d0247..8dd067c 100644
  private:
      QMediaPlayer m_mediaPlayer;
      QVideoProbe m_probe;
-+    // r7: ilk kare(ler) siyah olabiliyor (kamera/encoder isinmasi); erken kareleri
-+    // atlayip biraz ilerisinden thumbnail almak icin sayac.
++    // Counter used to skip the first frames, which can be black while the
++    // camera/encoder warms up, and take the thumbnail slightly later.
 +    int m_framesSeen = 0;
  };
  

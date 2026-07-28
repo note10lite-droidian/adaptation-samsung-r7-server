@@ -1,23 +1,21 @@
-Description: Status bar saatini punch-hole/on-kamera ile cakismayacak sekilde yonlendirmeye gore konumlandir
- Bu cihazda (SM-N770F, on kamera ust-orta punch-hole) gmobile'de eslesen bir
- display-panel yok (device-tree compatible stringleri "samsung,armv8" /
- "samsung,exynos9810" cok jenerik, cihaza ozel degil). Bu yuzden upstream'in
- cutout-farkinda saat konumlandirma mekanizmasi (layout-manager.c'deki
- PhoshLayoutManager->panel/get_clock_pos) hicbir zaman calismiyor ve saat
- varsayilan olarak merkezde kalip on kameranin altina denk geliyordu.
+Description: Position the status bar clock by orientation, clear of the punch-hole camera
+ On this device (SM-N770F, front camera in a top-centre punch-hole) there is no
+ matching display-panel in gmobile - the device-tree compatible strings
+ ("samsung,armv8" / "samsung,exynos9810") are too generic to identify the model.
+ Upstream's cutout-aware clock placement (PhoshLayoutManager->panel/get_clock_pos
+ in layout-manager.c) therefore never runs, and the clock stayed centred, right
+ underneath the camera.
  .
- Cozum, upstream'in cutout mekanizmasini degistirmek yerine (kesin kesim
- geometrisi bilinmedigi icin gereksiz), saati dogrudan .ui'de status_icons_box
- icine, pil ikonunun hemen soluna sabit yerlestiriyor (dikey/varsayilan durum)
- ve top-panel.c'de PhoshMonitor transform'una gore (panel genisligi degil -
- bu cihazda olcek/ppi hesaplamasi yuzunden guvenilmez) yatay modda saati
- box_top_bar'in ortasina tasiyor. PhoshStatusIconsBox kendi ozel
- GtkContainer'i oldugundan (GPtrArray tabanli, append hep index 0'a
- prepend eder, her cocugu bir GtkRevealer'a sarar) sira ve ancestor kontrolu
- buna gore ele alindi (bkz. yorumlar).
+ Rather than reworking upstream's cutout mechanism - pointless without the exact
+ cutout geometry - this places the clock directly in status_icons_box in the .ui
+ file, immediately left of the battery icon (the portrait/default case), and in
+ top-panel.c moves it to the centre of box_top_bar in landscape, keyed off the
+ PhoshMonitor transform. The transform is used rather than the panel width
+ because width is unreliable here, thanks to the device's scale/ppi calculation.
  .
- Kok neden analizi ve reddedilen alternatifler (ozel width-esigi kodu,
- gmobile display-panel.json uydurma) icin: device-info/GUNLUK.md G26.6.
+ PhoshStatusIconsBox is a custom GtkContainer (GPtrArray backed; append always
+ prepends at index 0, and each child is wrapped in a GtkRevealer), so ordering
+ and ancestor checks are handled accordingly - see the comments in the diff.
 Author: Yunus Tan <yunus.tan@outlook.com.tr>
 Origin: downstream, r7 (SM-N770F) Droidian port
 Forwarded: no
@@ -48,13 +46,13 @@ index 2b45e03..15ed354 100644
                                  <property name="child">location_info</property>
                                </object>
                              </child>
-+                            <!-- r7: saat buraya, pil ikonunun hemen soluna
-+                                 eklendi (m.20). status_icons_box hexpand=1
-+                                 + kendi ic "align=end" mantigiyla saga
-+                                 yasliyor; saat box_top_bar'da AYRI bir
-+                                 kardes olsaydi bu genislemeye katilmiyor,
-+                                 solda dogal boyutunda kalip pilden kopuk
-+                                 gorunuyordu. GUNLUK G26.6. -->
++                            <!-- Clock goes here, immediately left of the
++                                 battery icon. status_icons_box has hexpand=1
++                                 and its own internal "align=end" logic, so it
++                                 hugs the right edge; a clock placed as a
++                                 SEPARATE sibling in box_top_bar would not take
++                                 part in that expansion and would sit at its
++                                 natural size on the left, detached. -->
 +                            <child>
 +                              <object class="GtkLabel" id="lbl_clock">
 +                                <property name="visible">1</property>
@@ -79,27 +77,27 @@ index 974e800..18fad9b 100644
 +static void
 +reposition_clock (PhoshTopPanel *self)
 +{
-+  /* r7: Bu cihazda gmobile'de eslesen bir display-panel yok (device-tree
-+   * compatible stringleri cok jenerik), yani upstream'in cutout-farkinda
-+   * saat konumlandirmasi (layout-manager.c) hic calismiyor. Portre modda
-+   * saat status_icons_box icinde sabit (pilin hemen solunda, .ui'de
-+   * yerlestirildi, dogrulandi). Yatay modda on kamera kenara kaydigindan
-+   * saati box_top_bar'in ortasina tasiyoruz. Yon tespiti icin panel
-+   * genisligi degil PhoshMonitor transform kullaniliyor (genislik, cihazin
-+   * olcek/ppi hesaplamasi yuzunden guvenilir degil).
++  /* gmobile has no matching display-panel for this device (its device-tree
++   * compatible strings are too generic), so upstream's cutout-aware clock
++   * placement in layout-manager.c never runs. In portrait the clock is fixed
++   * inside status_icons_box, immediately left of the battery, placed there in
++   * the .ui file. In landscape the front camera moves to the edge, so the
++   * clock is moved to the centre of box_top_bar. Orientation comes from the
++   * PhoshMonitor transform rather than the panel width, because width is
++   * unreliable here thanks to the device's scale/ppi calculation.
 +   *
-+   * PhoshStatusIconsBox kendi ozel GtkContainer'i (GPtrArray tabanli,
-+   * append hep index 0'a prepend eder) oldugundan, portre moda donuste
-+   * sirayi korumak icin batteryinfo'yu clock'tan SONRA yeniden ekliyoruz;
-+   * boylece pil tekrar en kenara, saat hemen soluna gelir. GUNLUK G26.6. */
++   * PhoshStatusIconsBox is a custom GtkContainer (GPtrArray backed; append
++   * always prepends at index 0), so on the way back to portrait the battery
++   * info is re-appended AFTER the clock to preserve ordering - battery at the
++   * edge, clock immediately to its left. */
 +  PhoshMonitor *monitor = phosh_shell_get_primary_monitor (phosh_shell_get_default ());
 +  gboolean landscape = monitor && phosh_monitor_transform_is_tilted (phosh_monitor_get_transform (monitor));
 +  GtkWidget *parent = gtk_widget_get_parent (self->lbl_clock);
-+  /* r7: phosh_status_icons_box_append() cocugu kendi ozel GtkRevealer
-+   * sarmalayicisina koyuyor, yani lbl_clock'un DOGRUDAN ebeveyni
-+   * status_icons_box degil o revealer oluyor - "status_icons_box icinde
-+   * mi?" kontrolunu get_ancestor ile (sarmalayiciyi atlayarak) yapmak
-+   * gerekiyor. */
++  /* phosh_status_icons_box_append() wraps the child in its own GtkRevealer,
++   * so the DIRECT parent of lbl_clock is that revealer rather than
++   * status_icons_box itself. The "is it inside status_icons_box?" test
++   * therefore has to go through get_ancestor(), stepping over the
++   * wrapper. */
 +  gboolean in_status_icons = (gtk_widget_get_ancestor (self->lbl_clock, PHOSH_TYPE_STATUS_ICONS_BOX) ==
 +                              GTK_WIDGET (self->status_icons_box));
 +
