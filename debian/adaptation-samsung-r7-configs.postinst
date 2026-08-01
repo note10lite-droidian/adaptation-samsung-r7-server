@@ -64,6 +64,24 @@ if [ "$1" = "configure" ]; then
     fi
 fi
 
+# r7: repoint /etc/resolv.conf at NetworkManager's resolv.conf.
+#
+# WHY: the rootfs ships /etc/resolv.conf as a symlink to the systemd-resolved
+# stub (../run/systemd/resolve/stub-resolv.conf). systemd-resolved is MASKED on
+# this device, so that stub file is never created -> /etc/resolv.conf is a
+# DANGLING symlink and DNS fails completely (WiFi connects and 8.8.8.8 pings,
+# but no name resolves). 90-dns-no-stub.conf already tells NetworkManager to
+# write /run/NetworkManager/resolv.conf (dns=default, rc-manager=symlink), and
+# it does — but NetworkManager will NOT overwrite a pre-existing /etc/resolv.conf
+# symlink that points elsewhere, so it never repoints it. Force it here.
+#
+# This ships no static nameserver: it points at NM's own dynamically written
+# file (cf. the earlier removal of a hardcoded resolv.conf). The target may not
+# exist yet at unpack time; the symlink resolves once NM writes it on first boot.
+if [ "$1" = "configure" ]; then
+    ln -sf /run/NetworkManager/resolv.conf /etc/resolv.conf || true
+fi
+
 #DEBHELPER#
 
 exit 0
