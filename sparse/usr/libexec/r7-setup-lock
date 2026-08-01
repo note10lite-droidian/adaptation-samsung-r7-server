@@ -13,6 +13,16 @@
 # segfaults with PyGObject on this device) and NO Gtk.Spinner (continuous
 # software-rendered repaints froze the display). Progress updates are discrete.
 #
+# Lock scope (verified, accepted trade-off — GUNLUK G1.9): the wlr-layer-shell
+# OVERLAY surface blocks app switching / overview and makes escaping to any
+# other surface impossible — the security-critical requirement. phosh's own top
+# panel (notification shade / quick settings) still pulls down over the overlay,
+# because phosh maps it later on the same OVERLAY layer, and there is no layer
+# above OVERLAY to out-stack it. Fully blocking it would need fragile phosh
+# surgery (patch/hide the panel) which risks the display freezes we designed
+# around, so per the non-fragile-first rule it is deliberately left as-is: the
+# shade only exposes harmless quick toggles, never an escape from setup.
+#
 # Dev launch (no reboot), in the running phosh session:
 #   systemd-run --user --unit=r7-pilot \
 #     --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=GDK_BACKEND=wayland \
@@ -122,11 +132,11 @@ class SetupLock(Adw.Application):
 
         # OOBE lock via wlr-layer-shell. init_for_window MUST be called before
         # the window is realized, so do it first. An OVERLAY-layer surface
-        # (above phosh's top-layer panel) anchored to all edges fills the screen
-        # and, being topmost everywhere, intercepts every touch: the status bar
-        # cannot be pulled down, gestures do not reach phosh, no app switch is
-        # possible. Same mechanism phosh's own lockscreen uses — robust, not a
-        # fragile fight with the shell.
+        # anchored to all edges fills the screen and intercepts touch across it,
+        # so app switching / overview are blocked and there is no escape to
+        # another surface. (phosh's own notification shade still pulls down over
+        # it — see the module header for why that is accepted.) Same mechanism
+        # phosh's lockscreen uses — robust, not a fragile fight with the shell.
         LayerShell.init_for_window(win)
         LayerShell.set_namespace(win, "r7-setup-lock")
         LayerShell.set_layer(win, LayerShell.Layer.OVERLAY)
