@@ -1,0 +1,4 @@
+# r7: open /dev/uinput to the input group (so the r7-spen-mode-daemon user
+# service can create a uinput touchscreen). droidian is a member of the input
+# group.
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"

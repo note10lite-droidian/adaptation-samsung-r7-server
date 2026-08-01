@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+# r7 (SM-N770F) S-Pen mode daemon.
+#
+# WHY: the S-Pen presents to libinput as a tablet-tool (=pointer); hover/tap/
+# button work, but the pen cannot scroll because GTK/phosh kinetic scrolling is
+# driven by TOUCH events. Depending on the GSetting org.droidian.spen
+# finger-mode this daemon presents the pen in one of two modes:
+#   finger-mode=false (default) -> "pen": the daemon does NOT grab the pen, phoc
+#       uses it directly as a tablet (hover + pressure + side button).
+#   finger-mode=true -> "touch": the daemon grabs the pen and re-emits it as a
+#       uinput TOUCHSCREEN (only while the tip is down; not on hover) -> phosh
+#       kinetic scroll + tap behave like a finger.
+# The toggle is live: changing the GSetting switches mode instantly. Root cause:
+# GUNLUK G26.3.
+#
+# Runtime context: phosh user service. event1 (sec_e-pen) is reachable via the
+# android_input group, /dev/uinput via 99-uinput-r7.rules (input group; droidian
+# is a member).
+
+import sys
+import subprocess
+import gi
+gi.require_version("Gio", "2.0")
+gi.require_version("GLib", "2.0")
+from gi.repository import Gio, GLib
+import evdev
+from evdev import InputDevice, UInput, ecodes as e, AbsInfo
+
+PEN_NAME = "sec_e-pen"
+SCHEMA = "org.droidian.spen"
+KEY = "finger-mode"
+
+
+def find_pen():
+    for path in evdev.list_devices():
+        try:
+            d = InputDevice(path)
+            if d.name == PEN_NAME:
+                return d
+        except Exception:
+            pass
+    return None
+
+
+class SpenMode:
+    def __init__(self):
+        self.pen = None
+        self.ui = None
+        self.watch_id = 0
+        self.grabbed = False
+        self.x = self.y = 0
+        self.touching = False
+        self.tid = 0
+        # Gio.Settings "changed" signal (the instant path). In some sessions this
+        # signal does not arrive reliably (cause unclear; the bus is present but
+        # it is not triggered), so there is a POLL fallback below that re-reads
+        # the value fresh.
+        self.settings = Gio.Settings.new(SCHEMA)
+        self.settings.connect("changed::" + KEY, lambda s, k: self.apply())
+        self.apply()
+        # Poll fallback: every 2s re-read the gsetting FRESH (subprocess ->
+        # independent of cache/signal) and switch mode if needed. The toggle
+        # takes effect within 2s at the latest.
+        GLib.timeout_add_seconds(2, self._poll)
+
+    def _read_finger_mode(self):
+        # Fresh read: the gsettings CLI directly, rather than the Gio.Settings
+        # cache (which can go stale if a signal is missed). Bulletproof.
+        try:
+            out = subprocess.run(
+                ["gsettings", "get", SCHEMA, KEY],
+                capture_output=True, text=True, timeout=3,
+            ).stdout.strip()
+            return out == "true"
+        except Exception:
+            return self.settings.get_boolean(KEY)
+
+    def _poll(self):
+        self.apply()
+        return True
+
+    def open_pen(self):
+        if self.pen is None:
+            self.pen = find_pen()
+        return self.pen
+
+    def enter_touch(self):
+        pen = self.open_pen()
+        if pen is None:
+            sys.stderr.write("r7-spen: pen (sec_e-pen) not found\n")
+            return
+        absd = dict(pen.capabilities(absinfo=True).get(e.EV_ABS, []))
+        ax = absd.get(e.ABS_X)
+        ay = absd.get(e.ABS_Y)
+        maxx = ax.max if ax else 6955
+        maxy = ay.max if ay else 15456
+        cap = {
+            e.EV_KEY: [e.BTN_TOUCH],
+            e.EV_ABS: [
+                (e.ABS_X, AbsInfo(0, 0, maxx, 0, 0, 100)),
+                (e.ABS_Y, AbsInfo(0, 0, maxy, 0, 0, 100)),
+                (e.ABS_MT_SLOT, AbsInfo(0, 0, 9, 0, 0, 0)),
+                (e.ABS_MT_TRACKING_ID, AbsInfo(-1, -1, 65535, 0, 0, 0)),
+                (e.ABS_MT_POSITION_X, AbsInfo(0, 0, maxx, 0, 0, 100)),
+                (e.ABS_MT_POSITION_Y, AbsInfo(0, 0, maxy, 0, 0, 100)),
+            ],
+        }
+        try:
+            self.ui = UInput(cap, name="r7-spen-touch", input_props=[e.INPUT_PROP_DIRECT])
+        except TypeError:
+            self.ui = UInput(cap, name="r7-spen-touch")
+        # r7: clear slot 0 (TRACKING_ID -1) so the new uinput device has no
+        # phantom (stuck) touch. Otherwise phoc's seat touch handling breaks and
+        # the REAL touchscreen (finger) is not routed.
+        self.ui.write(e.EV_ABS, e.ABS_MT_SLOT, 0)
+        self.ui.write(e.EV_ABS, e.ABS_MT_TRACKING_ID, -1)
+        self.ui.write(e.EV_KEY, e.BTN_TOUCH, 0)
+        self.ui.syn()
+        pen.grab()
+        self.grabbed = True
+        self.touching = False
+        self.watch_id = GLib.io_add_watch(pen.fd, GLib.IO_IN, self.on_pen_readable)
+        sys.stderr.write("r7-spen: TOUCH (finger) mode ON\n")
+        sys.stderr.flush()
+
+    def exit_touch(self):
+        if self.watch_id:
+            GLib.source_remove(self.watch_id)
+            self.watch_id = 0
+        if self.pen and self.grabbed:
+            try:
+                self.pen.ungrab()
+            except Exception:
+                pass
+            self.grabbed = False
+        if self.ui:
+            try:
+                self.ui.close()
+            except Exception:
+                pass
+            self.ui = None
+        sys.stderr.write("r7-spen: PEN (tablet) mode\n")
+        sys.stderr.flush()
+
+    def apply(self):
+        want_touch = self._read_finger_mode()
+        if want_touch and not self.grabbed:
+            self.enter_touch()
+        elif not want_touch and self.grabbed:
+            self.exit_touch()
+
+    def on_pen_readable(self, fd, cond):
+        try:
+            for ev in self.pen.read():
+                self.translate(ev)
+        except OSError:
+            pass
+        return True
+
+    def translate(self, ev):
+        ui = self.ui
+        if ui is None:
+            return
+        if ev.type == e.EV_ABS:
+            if ev.code == e.ABS_X:
+                self.x = ev.value
+            elif ev.code == e.ABS_Y:
+                self.y = ev.value
+        elif ev.type == e.EV_KEY and ev.code == e.BTN_TOUCH:
+            if ev.value and not self.touching:
+                self.touching = True
+                self.tid += 1
+                ui.write(e.EV_ABS, e.ABS_MT_SLOT, 0)
+                ui.write(e.EV_ABS, e.ABS_MT_TRACKING_ID, self.tid)
+                ui.write(e.EV_ABS, e.ABS_MT_POSITION_X, self.x)
+                ui.write(e.EV_ABS, e.ABS_MT_POSITION_Y, self.y)
+                ui.write(e.EV_KEY, e.BTN_TOUCH, 1)
+                ui.write(e.EV_ABS, e.ABS_X, self.x)
+                ui.write(e.EV_ABS, e.ABS_Y, self.y)
+                ui.syn()
+            elif not ev.value and self.touching:
+                self.touching = False
+                ui.write(e.EV_ABS, e.ABS_MT_SLOT, 0)
+                ui.write(e.EV_ABS, e.ABS_MT_TRACKING_ID, -1)
+                ui.write(e.EV_KEY, e.BTN_TOUCH, 0)
+                ui.syn()
+        elif ev.type == e.EV_SYN and ev.code == e.SYN_REPORT and self.touching:
+            ui.write(e.EV_ABS, e.ABS_MT_SLOT, 0)
+            ui.write(e.EV_ABS, e.ABS_MT_POSITION_X, self.x)
+            ui.write(e.EV_ABS, e.ABS_MT_POSITION_Y, self.y)
+            ui.write(e.EV_ABS, e.ABS_X, self.x)
+            ui.write(e.EV_ABS, e.ABS_Y, self.y)
+            ui.syn()
+
+
+if __name__ == "__main__":
+    SpenMode()
+    GLib.MainLoop().run()

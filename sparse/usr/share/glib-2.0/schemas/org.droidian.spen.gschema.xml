@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.droidian.spen" path="/org/droidian/spen/">
+    <key name="finger-mode" type="b">
+      <default>false</default>
+      <summary>S-Pen finger (touch) mode</summary>
+      <description>
+        r7 (SM-N770F). When true the S-Pen behaves like a finger (touchscreen):
+        drag scrolls and tap taps, driven by r7-spen-mode-daemon. When false the
+        S-Pen behaves as a tablet stylus (hover, pressure, side button) but drag
+        does not scroll.
+      </description>
+    </key>
+  </schema>
+</schemalist>

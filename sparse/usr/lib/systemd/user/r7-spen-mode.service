@@ -1,0 +1,13 @@
+[Unit]
+Description=r7 S-Pen mode daemon (tablet/touch toggle)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/r7-spen-mode-daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

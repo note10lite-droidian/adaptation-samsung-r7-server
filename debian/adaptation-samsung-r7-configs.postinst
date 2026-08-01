@@ -44,6 +44,26 @@ if [ "$1" = "configure" ] && [ -f "$CAMCONF" ]; then
     fi
 fi
 
+# r7: compile the S-Pen (sec_e-pen) hwdb quirk. sparse/etc/udev/hwdb.d/61-sec-epen.hwdb
+# gives ABS_X/ABS_Y a resolution (libinput otherwise rejects the pen). The
+# hwdb.bin MUST be regenerated or the quirk never takes effect. Idempotent.
+if [ "$1" = "configure" ] && command -v systemd-hwdb >/dev/null 2>&1; then
+    systemd-hwdb update || true
+fi
+
+# r7: S-Pen mode daemon (tablet/touch toggle). Compile the GSettings schema and
+# enable the user service for all users. The schema is shipped via sparse under
+# /usr/share/glib-2.0/schemas/; the toggle (phosh-mobile-settings) and the daemon
+# read the same schema.
+if [ "$1" = "configure" ]; then
+    if command -v glib-compile-schemas >/dev/null 2>&1; then
+        glib-compile-schemas /usr/share/glib-2.0/schemas/ || true
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl --global enable r7-spen-mode.service || true
+    fi
+fi
+
 #DEBHELPER#
 
 exit 0

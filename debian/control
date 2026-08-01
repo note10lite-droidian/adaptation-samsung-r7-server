@@ -16,4 +16,6 @@ Description: Community adaptation for samsung-r7 - metapackage
 Package: adaptation-samsung-r7-configs
 Architecture: arm64
 Depends: ${misc:Depends},
+         python3-gi,
+         python3-evdev,
 Description: Community adaptation for samsung-r7 - adaptation configurations

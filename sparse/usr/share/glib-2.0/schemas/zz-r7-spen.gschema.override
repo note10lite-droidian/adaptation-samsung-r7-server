@@ -1,0 +1,4 @@
+# r7: enable Configurable Tweaks by default in phosh-mobile-settings so the
+# S-Pen toggle (tweaks/spen.yaml) is visible without the user turning it on.
+[mobi.phosh.MobileSettings]
+enable-conf-tweaks=true

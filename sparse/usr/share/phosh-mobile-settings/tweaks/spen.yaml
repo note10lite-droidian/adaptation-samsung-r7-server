@@ -1,0 +1,19 @@
+# r7 (SM-N770F) S-Pen tablet/touch toggle, exposed via phosh-mobile-settings
+# Configurable Tweaks (postmarketOS YAML format). Bound to GSetting
+# org.droidian.spen finger-mode; read by r7-spen-mode-daemon. See GUNLUK G26.4.
+- name: S-Pen
+  icon: input-tablet-symbolic
+  weight: 50
+  sections:
+    - name: Input
+      weight: 0
+      settings:
+        - name: Pen acts like a finger
+          help: >-
+            When on, the S-Pen behaves like a finger: dragging scrolls and tapping
+            taps, alongside normal finger touch. When off, the S-Pen behaves as a
+            stylus: hover cursor, pressure and side button work, but dragging does
+            not scroll. Finger touch works in both modes.
+          backend: gsettings
+          key: org.droidian.spen.finger-mode
+          type: boolean

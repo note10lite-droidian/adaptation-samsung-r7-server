@@ -1,0 +1,15 @@
+# r7 (SM-N770F) S-Pen — Samsung sec_e-pen (Wacom W90xx EMR) digitizer.
+#
+# WHY: the Samsung sec_e-pen driver does not report resolution (units/mm) on the
+# ABS_X/ABS_Y axes (input_abs_set_res is never called). libinput therefore
+# REJECTS the device with "missing tablet capabilities: resolution" -> pen
+# hover/tap/button did not work at all (the kernel driver and hardware are fine;
+# dmesg shows [HI]/[P]/[R], events reach the kernel but libinput drops them).
+#
+# FIX: give ABS_X/ABS_Y a resolution. The screen active area is ~69.8x155.2mm;
+# ABS_X max=6955, ABS_Y max=15456 -> ~100 units/mm. With this libinput accepts
+# the device as a tablet (Size: 70x155mm confirmed) and phoc picks the pen up as
+# a tablet-tool. No kernel rebuild required. Root cause: device-info/GUNLUK.md G26.2.
+evdev:name:sec_e-pen:*
+ EVDEV_ABS_00=0:6955:100
+ EVDEV_ABS_01=0:15456:100
