@@ -1,0 +1,13 @@
+[Unit]
+Description=Trigger the r7 setup lock once GNOME Initial Setup has finished
+# The setup lock must NOT cover GNOME Initial Setup: the user configures Wi-Fi
+# there, and the lock's readiness probes (e.g. DNS) need that network. So wait
+# for GIS to write its completion stamp, then start the lock.
+ConditionPathExists=!%h/.local/state/r7-setup-lock-done
+
+[Path]
+PathExists=%h/.config/gnome-initial-setup-done
+Unit=r7-setup-lock.service
+
+[Install]
+WantedBy=graphical-session.target

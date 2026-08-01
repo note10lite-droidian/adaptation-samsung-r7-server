@@ -1,0 +1,22 @@
+[Unit]
+Description=r7 first-boot setup lock (OOBE gate until the port's runtime patches settle)
+PartOf=graphical-session.target
+After=graphical-session.target
+# Shown until the user acknowledges completion (stamp written by the app).
+# Absent stamp after a mid-setup reboot => the lock re-shows: resilient.
+ConditionPathExists=!%h/.local/state/r7-setup-lock-done
+
+[Service]
+Type=simple
+# Non-fragile render recipe for this device (GUNLUK G1.7): GTK4 GL segfaults
+# under PyGObject, so force cairo.
+Environment=GDK_BACKEND=wayland
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=GSK_RENDERER=cairo
+# gtk4-layer-shell must load before GTK4; with Python that means LD_PRELOAD.
+Environment=LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgtk4-layer-shell.so.0
+ExecStart=/usr/libexec/r7-setup-lock
+Restart=no
+
+[Install]
+WantedBy=graphical-session.target

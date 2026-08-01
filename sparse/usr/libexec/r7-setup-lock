@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+# r7 (SM-N770F) first-boot setup-lock screen.
+#
+# Purpose: an OOBE gate shown on first boot. It stays until every runtime patch
+# of this port is confirmed active and settled, so the user never lands on a
+# half-configured system (e.g. camera not yet up, frame-pacing not yet applied).
+# It shows NO per-component step narrative — the adaptation postinst runs at
+# image-build time, so there is no literal "installing camera" at first boot;
+# instead it waits on real readiness probes and reports overall progress.
+#
+# Non-fragile render recipe (see GUNLUK G1.7): GSK_RENDERER=cairo (GTK4 GL
+# segfaults with PyGObject on this device) and NO Gtk.Spinner (continuous
+# software-rendered repaints froze the display). Progress updates are discrete.
+#
+# Dev launch (no reboot), in the running phosh session:
+#   systemd-run --user --unit=r7-pilot \
+#     --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=GDK_BACKEND=wayland \
+#     --setenv=GSK_RENDERER=cairo python3 r7-setup-progress.py
+
+import os
+import socket
+import subprocess
+import gi
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+gi.require_version("Gtk4LayerShell", "1.0")
+from gi.repository import Gtk, Adw, GLib, Gtk4LayerShell as LayerShell
+
+
+def _sysctl_active(scope, unit):
+    try:
+        out = subprocess.run(
+            ["systemctl"] + (["--user"] if scope == "user" else []) + ["is-active", unit],
+            capture_output=True, text=True, timeout=4,
+        ).stdout.strip()
+        return out == "active"
+    except Exception:
+        return False
+
+
+def check_ion():
+    # gralloc needs /dev/ion world-accessible (else phoc renders black).
+    try:
+        return (os.stat("/dev/ion").st_mode & 0o006) == 0o006
+    except Exception:
+        return False
+
+
+def check_frame_pacing():
+    # WLR_HWC_IDLE_TIME must be in the running phoc's environment.
+    try:
+        pid = subprocess.run(["pgrep", "-x", "phoc"], capture_output=True,
+                             text=True, timeout=4).stdout.split()[0]
+        with open("/proc/%s/environ" % pid, "rb") as f:
+            env = f.read().split(b"\0")
+        return any(e.startswith(b"WLR_HWC_IDLE_TIME=") for e in env)
+    except Exception:
+        return False
+
+
+def check_audio_hal():
+    return _sysctl_active("system", "android-audio-hal")
+
+
+def check_audio_sink():
+    try:
+        out = subprocess.run(["pactl", "list", "short", "sinks"],
+                             capture_output=True, text=True, timeout=4).stdout
+        return "sink.primary-out" in out
+    except Exception:
+        return False
+
+
+def check_camera():
+    try:
+        with open("/etc/droidian-camera.conf") as f:
+            return "backend=gst" in f.read()
+    except Exception:
+        return False
+
+
+def check_spen_daemon():
+    return _sysctl_active("user", "r7-spen-mode.service")
+
+
+def check_dns():
+    try:
+        socket.getaddrinfo("deb.debian.org", 80)
+        return True
+    except Exception:
+        return False
+
+
+def check_sensors():
+    return _sysctl_active("system", "iio-sensor-proxy")
+
+
+# Every runtime patch of the port that can race at first boot. Order is not
+# shown to the user; only the overall fraction is.
+PROBES = [
+    check_ion,
+    check_frame_pacing,
+    check_audio_hal,
+    check_audio_sink,
+    check_camera,
+    check_spen_daemon,
+    check_dns,
+    check_sensors,
+]
+
+
+class SetupLock(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id="org.droidian.r7.SetupLock")
+
+    def do_activate(self):
+        # Gtk.ApplicationWindow (not Adw.ApplicationWindow): gtk4-layer-shell is
+        # incompatible with AdwApplicationWindow's internal surface. Adw content
+        # widgets still work inside a plain GtkApplicationWindow.
+        win = Gtk.ApplicationWindow(application=self)
+
+        # OOBE lock via wlr-layer-shell. init_for_window MUST be called before
+        # the window is realized, so do it first. An OVERLAY-layer surface
+        # (above phosh's top-layer panel) anchored to all edges fills the screen
+        # and, being topmost everywhere, intercepts every touch: the status bar
+        # cannot be pulled down, gestures do not reach phosh, no app switch is
+        # possible. Same mechanism phosh's own lockscreen uses — robust, not a
+        # fragile fight with the shell.
+        LayerShell.init_for_window(win)
+        LayerShell.set_namespace(win, "r7-setup-lock")
+        LayerShell.set_layer(win, LayerShell.Layer.OVERLAY)
+        for edge in (LayerShell.Edge.TOP, LayerShell.Edge.BOTTOM,
+                     LayerShell.Edge.LEFT, LayerShell.Edge.RIGHT):
+            LayerShell.set_anchor(win, edge, True)
+        LayerShell.set_exclusive_zone(win, -1)
+        LayerShell.set_keyboard_mode(win, LayerShell.KeyboardMode.EXCLUSIVE)
+
+        win.set_title("Setting up your device")
+        win.set_default_size(360, 720)
+
+        self.status = Adw.StatusPage()
+        self.status.set_icon_name("preferences-other-symbolic")
+        self.status.set_title("Setting up your device")
+        self.status.set_description("This only happens once.")
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.set_halign(Gtk.Align.CENTER)
+
+        # Real progress (fraction of readiness probes passed) — discrete
+        # updates, no continuous animation.
+        self.progress = Gtk.ProgressBar()
+        self.progress.set_size_request(240, -1)
+        self.progress.set_fraction(0.0)
+        box.append(self.progress)
+
+        # Hidden until every probe passes.
+        self.done_btn = Gtk.Button(label="Start using your phone")
+        self.done_btn.add_css_class("pill")
+        self.done_btn.add_css_class("suggested-action")
+        self.done_btn.set_halign(Gtk.Align.CENTER)
+        self.done_btn.set_visible(False)
+        self.done_btn.connect("clicked", self._finish)
+        box.append(self.done_btn)
+
+        self.status.set_child(box)
+        toolbar = Adw.ToolbarView()
+        toolbar.set_content(self.status)
+        win.set_child(toolbar)
+
+        self.win = win
+        win.present()
+
+        self._poll()
+        GLib.timeout_add_seconds(2, self._poll)
+
+    def _poll(self):
+        passed = sum(1 for p in PROBES if _safe(p))
+        total = len(PROBES)
+        self.progress.set_fraction(passed / total)
+        if passed >= total:
+            self.status.set_title("Your phone is ready")
+            self.status.set_description("Setup is complete.")
+            self.done_btn.set_visible(True)
+            return False
+        return True
+
+    def _finish(self, *_):
+        # Persist the completion stamp only when the user acknowledges after all
+        # probes pass. The launcher service is gated on this file, so the lock
+        # never shows again — but if the device had rebooted mid-setup (before
+        # this), the stamp would be absent and the lock re-shows: resilient.
+        try:
+            path = os.path.expanduser("~/.local/state/r7-setup-lock-done")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write("done\n")
+        except Exception:
+            pass
+        self.win.close()
+
+
+def _safe(probe):
+    try:
+        return bool(probe())
+    except Exception:
+        return False
+
+
+if __name__ == "__main__":
+    SetupLock().run(None)

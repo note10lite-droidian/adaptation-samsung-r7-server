@@ -64,6 +64,15 @@ if [ "$1" = "configure" ]; then
     fi
 fi
 
+# r7: first-boot setup lock (OOBE). Enable the .path unit for all users; it
+# waits for GNOME Initial Setup to finish, then starts the lock, which holds a
+# wlr-layer-shell overlay (blocking the panel and all gestures) until every
+# runtime patch of the port has settled, then lets the user in. Enabling the
+# .path (not the .service) is deliberate — the path sequences it after GIS.
+if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl --global enable r7-setup-lock.path || true
+fi
+
 # r7: repoint /etc/resolv.conf at NetworkManager's resolv.conf.
 #
 # WHY: the rootfs ships /etc/resolv.conf as a symlink to the systemd-resolved
