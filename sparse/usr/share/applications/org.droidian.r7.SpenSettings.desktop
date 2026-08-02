@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=S-Pen
+Comment=Choose whether the S-Pen acts as a stylus or a finger
+Exec=/usr/libexec/r7-spen-settings
+Icon=input-tablet-symbolic
+Terminal=false
+Categories=Settings;Utility;
+Keywords=spen;s-pen;stylus;pen;finger;touch;

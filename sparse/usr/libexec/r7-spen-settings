@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+# r7 (SM-N770F) S-Pen settings: a one-switch app to toggle finger-mode.
+#
+# WHY a standalone app: the S-Pen finger-mode daemon (r7-spen-mode.service)
+# works and is driven by the GSetting org.droidian.spen finger-mode, but on the
+# 0.49 channel phosh-mobile-settings has no working Configurable Tweaks parser
+# (the pmos-tweaks framework is a stub there; the real ~1500-line implementation
+# only landed in 0.55's conf-tweaks). Rather than transplant that whole
+# framework for one boolean, we ship this tiny app. When the base moves to 0.55
+# the toggle appears inside Mobile Settings (fork phosh-mobile-settings@r7,
+# +r7spen2) and this app should be dropped.
+#
+# GSK_RENDERER=cairo is mandatory: GTK4's GL renderer segfaults with PyGObject
+# on this device (see the setup-lock, GUNLUK G1.7 / r7-gtk4-render-quirks).
+
+import os
+
+os.environ.setdefault("GSK_RENDERER", "cairo")
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Adw, Gio
+
+SCHEMA = "org.droidian.spen"
+KEY = "finger-mode"
+
+
+class SpenSettings(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id="org.droidian.r7.SpenSettings")
+
+    def do_activate(self):
+        win = Adw.ApplicationWindow(application=self)
+        win.set_title("S-Pen")
+        win.set_default_size(360, 240)
+
+        settings = Gio.Settings.new(SCHEMA)
+
+        # Adw.SwitchRow (not Gtk.Switch in an ActionRow): on a touchscreen a tap
+        # on a bare Gtk.Switch is read as the start of a drag and does not
+        # toggle; SwitchRow makes the whole row tappable and flips reliably.
+        row = Adw.SwitchRow()
+        row.set_title("Pen acts like a finger")
+        row.set_subtitle(
+            "On: the S-Pen scrolls and taps like a finger. "
+            "Off: it works as a stylus (hover cursor, pressure, side button). "
+            "Finger touch always works."
+        )
+        settings.bind(KEY, row, "active", Gio.SettingsBindFlags.DEFAULT)
+
+        group = Adw.PreferencesGroup()
+        group.set_title("Input")
+        group.add(row)
+
+        page = Adw.PreferencesPage()
+        page.add(group)
+
+        toolbar = Adw.ToolbarView()
+        toolbar.add_top_bar(Adw.HeaderBar())
+        toolbar.set_content(page)
+
+        win.set_content(toolbar)
+        win.present()
+
+
+if __name__ == "__main__":
+    SpenSettings().run(None)

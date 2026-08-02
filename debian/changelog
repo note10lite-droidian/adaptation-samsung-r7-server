@@ -1,14 +1,14 @@
-adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup2+r7ssh1) bookworm; urgency=medium
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup2+r7ssh1+r7spenapp1) bookworm; urgency=medium
 
-  * Ship a working SSH server out of the box. The base image installs NO SSH
-    server (only client libs), so a fresh flash had the "Secure Shell" toggle
-    but nothing behind it (ssh.service did not exist -> the toggle reverted) and
-    NO remote access at all, which matters because USB RNDIS is unreliable on
-    this device. The metapackage now Depends on openssh-server.
-  * Add r7-regenerate-ssh-host-keys.service (first-boot oneshot, ordered before
-    sshd binds, stamped): installing openssh-server at image-build time bakes
-    host keys into the public image, so every device would share them; this
-    wipes and regenerates per-device keys on first boot instead.
+  * Add r7-spen-settings: a tiny standalone GTK4/Adw app (one Adw.SwitchRow
+    bound to org.droidian.spen finger-mode) plus a .desktop, so the S-Pen
+    finger-mode has a visible on/off toggle on the 0.49 channel. Mobile Settings
+    0.49 ships a non-functional Configurable Tweaks stub (the real ~1500-line
+    pmos-tweaks/conf-tweaks parser only exists from 0.55), so the tweak page
+    cannot be shown there without transplanting the whole framework; this app is
+    the light, non-fragile alternative. GSK_RENDERER=cairo (GTK4 GL segfaults
+    here). When the base moves to 0.55 the toggle returns inside Mobile Settings
+    (phosh-mobile-settings@r7, +r7spen2) and this app should be dropped.
 
- -- Yunus Tan <yunus.tan@outlook.com.tr>  Sun, 02 Aug 2026 18:00:36 +0300
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Sun, 02 Aug 2026 19:50:15 +0300
 
