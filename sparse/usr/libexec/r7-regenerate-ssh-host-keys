@@ -1,0 +1,17 @@
+#!/bin/sh
+# Regenerate SSH host keys once per device on first boot.
+#
+# adaptation-samsung-r7 pulls openssh-server, whose maintainer script generates
+# host keys inside the image build chroot. Without this, every flashed device
+# would ship the SAME baked-in host keys (a public image => trivial MITM). Wipe
+# them once, generate fresh per-device keys, and stamp so this never runs again.
+set -eu
+
+STAMP=/var/lib/r7-ssh-hostkeys-regenerated
+[ -e "$STAMP" ] && exit 0
+
+rm -f /etc/ssh/ssh_host_*
+ssh-keygen -A
+
+mkdir -p "$(dirname "$STAMP")"
+: > "$STAMP"

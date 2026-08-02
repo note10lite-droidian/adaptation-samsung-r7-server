@@ -1,0 +1,16 @@
+[Unit]
+Description=Regenerate SSH host keys on first boot (image ships shared keys)
+Documentation=man:ssh-keygen(1)
+ConditionPathExists=!/var/lib/r7-ssh-hostkeys-regenerated
+# Must finish before sshd binds, or it would serve the baked-in image keys once.
+Before=ssh.service ssh.socket
+After=local-fs.target
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/r7-regenerate-ssh-host-keys
+
+[Install]
+WantedBy=multi-user.target
