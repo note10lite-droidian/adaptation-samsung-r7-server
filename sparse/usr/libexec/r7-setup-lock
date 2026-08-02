@@ -29,7 +29,6 @@
 #     --setenv=GSK_RENDERER=cairo python3 r7-setup-progress.py
 
 import os
-import socket
 import subprocess
 import gi
 gi.require_version("Gtk", "4.0")
@@ -94,12 +93,15 @@ def check_spen_daemon():
     return _sysctl_active("user", "r7-spen-mode.service")
 
 
-def check_dns():
-    try:
-        socket.getaddrinfo("deb.debian.org", 80)
-        return True
-    except Exception:
-        return False
+# NB: DNS / internet reachability is deliberately NOT a probe. This lock is a
+# fullscreen wlr-layer-shell OVERLAY that intercepts every touch, so the user
+# cannot pull down the status bar or open Settings to join a Wi-Fi network while
+# it is up. A probe like getaddrinfo("deb.debian.org") can therefore never pass
+# at first boot (fresh install has no saved connection, no guaranteed SIM data)
+# and the gate deadlocks at 7/8 forever. Internet is a user action, not a
+# runtime-patch readiness state, so it does not belong here. (Verified on device
+# 2026-08-02: setup hung at the last bar step for exactly this reason; GUNLUK
+# G1.18.)
 
 
 def check_sensors():
@@ -115,7 +117,6 @@ PROBES = [
     check_audio_sink,
     check_camera,
     check_spen_daemon,
-    check_dns,
     check_sensors,
 ]
 
