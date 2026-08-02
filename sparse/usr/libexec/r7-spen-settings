@@ -13,10 +13,15 @@
 #
 # GSK_RENDERER=cairo is mandatory: GTK4's GL renderer segfaults with PyGObject
 # on this device (see the setup-lock, GUNLUK G1.7 / r7-gtk4-render-quirks).
+# This MUST be a hard override, not setdefault(): the phosh session exports
+# GSK_RENDERER=gl into the systemd user environment, so when launched from the
+# app grid the app inherits "gl" and segfaults (_PyThreadState_Attach fatal
+# error). setdefault() left the inherited "gl" in place -> the app opened over
+# SSH (var unset) but crashed from the launcher. Force cairo unconditionally.
 
 import os
 
-os.environ.setdefault("GSK_RENDERER", "cairo")
+os.environ["GSK_RENDERER"] = "cairo"
 
 import gi
 
