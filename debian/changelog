@@ -1,3 +1,20 @@
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup2+r7ssh1+r7spenapp2+r7desktop2) bookworm; urgency=medium
+
+  * Desktop-shell: add r7-auto-rotate.service (follows the accelerometer via
+    net.hadess.SensorProxy, applies wlr-randr --transform) and REMOVE the
+    libinput touch calibration matrix entirely. A prior version of this
+    package had concluded wlroots doesn't apply the output transform to touch
+    input and compensated with a per-rotation libinput calibration matrix
+    (written to a volatile /run udev rule by r7-switch-session and
+    r7-auto-rotate). That conclusion was wrong: wlroots DOES apply the output
+    transform to touch internally, so the matrix was double-rotating touch,
+    landing taps mirrored/inverted (right edge activated the leftmost waybar
+    icon). Proven live (2026-08-04, including a full device reboot to rule out
+    session-state corruption as an alternative explanation): with NO
+    calibration matrix at all, touch is correctly aligned in every rotation.
+    r7-switch-session and r7-auto-rotate are both simplified accordingly (no
+    more calibration file writes or targeted udev retriggers).
+
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup2+r7ssh1+r7spenapp2+r7desktop1) bookworm; urgency=medium
 
   * Add opt-in wayfire desktop-shell mode (adaptation-samsung-r7-desktop

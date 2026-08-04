@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""r7 auto-rotate: follow accelerometer orientation (net.hadess.SensorProxy)
+in the wayfire desktop session and apply the matching output transform.
+
+No touch calibration matrix is needed: this wlroots/hwcomposer build already
+applies the output transform to absolute input devices internally (proven
+2026-08-04 -- a prior session had wrongly concluded otherwise and layered a
+libinput calibration matrix on top, which double-rotated touch and made it
+land inverted; removing the matrix entirely fixed it). See
+r7-wayfire-hwcomposer-viable memory for the full story.
+"""
+import subprocess
+from gi.repository import GLib, Gio
+
+OUTPUT = "HWCOMPOSER-1"
+
+# net.hadess.SensorProxy orientation -> wlr-randr transform. Convention
+# matches gnome-settings-daemon/mutter's orientation manager (left-up=90,
+# right-up=270); right-up->270 empirically confirmed correct on-device.
+ORIENTATION_MAP = {
+    "normal":    "normal",
+    "bottom-up": "180",
+    "left-up":   "90",
+    "right-up":  "270",
+}
+
+_last_state = None
+
+
+def apply_orientation(state):
+    global _last_state
+    transform = ORIENTATION_MAP.get(state)
+    if transform is None or state == _last_state:
+        return
+    _last_state = state
+    print(f"r7-auto-rotate: {state} -> transform={transform}", flush=True)
+    subprocess.run(["wlr-randr", "--output", OUTPUT, "--transform", transform], check=False)
+
+
+def on_properties_changed(proxy, changed, invalidated):
+    changed_dict = changed.unpack()
+    if "AccelerometerOrientation" in changed_dict:
+        apply_orientation(changed_dict["AccelerometerOrientation"])
+
+
+def main():
+    bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+    proxy = Gio.DBusProxy.new_sync(
+        bus, Gio.DBusProxyFlags.NONE, None,
+        "net.hadess.SensorProxy", "/net/hadess/SensorProxy",
+        "net.hadess.SensorProxy", None)
+    proxy.call_sync("ClaimAccelerometer", None, Gio.DBusCallFlags.NONE, -1, None)
+    proxy.connect("g-properties-changed", on_properties_changed)
+
+    state = proxy.get_cached_property("AccelerometerOrientation")
+    if state is not None:
+        apply_orientation(state.unpack())
+
+    loop = GLib.MainLoop()
+    try:
+        loop.run()
+    finally:
+        try:
+            proxy.call_sync("ReleaseAccelerometer", None, Gio.DBusCallFlags.NONE, -1, None)
+        except GLib.Error:
+            pass
+
+
+if __name__ == "__main__":
+    main()

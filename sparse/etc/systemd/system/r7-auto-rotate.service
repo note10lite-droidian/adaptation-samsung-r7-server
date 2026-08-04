@@ -1,0 +1,16 @@
+[Unit]
+Description=r7 auto-rotate: follow accelerometer for the wayfire desktop session
+BindsTo=wayfire-test.service
+After=wayfire-test.service iio-sensor-proxy.service
+Requires=iio-sensor-proxy.service
+
+[Service]
+Type=simple
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_RUNTIME_DIR=/run/user/32011
+ExecStart=/usr/bin/r7-auto-rotate
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=wayfire-test.service

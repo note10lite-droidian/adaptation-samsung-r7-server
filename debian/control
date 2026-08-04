@@ -38,13 +38,17 @@ Depends: ${misc:Depends},
          fuzzel,
          foot,
          wlr-randr,
+         iio-sensor-proxy,
 Description: Community adaptation for samsung-r7 - desktop-shell (wayfire) mode
  Opt-in landscape desktop session for the r7 built on wayfire over the
  hwcomposer-patched wlroots. NOT enabled by default (phosh stays the shipped
  session); switch live with r7-switch-session. The config files (wayfire.ini,
- waybar, wayfire-test.service, r7-switch-session) ship inert in -configs; this
- metapackage only pulls the runtime stack (wayfire/waybar/fuzzel/foot/wlr-randr).
+ waybar, wayfire-test.service, r7-auto-rotate.service, r7-switch-session) ship
+ inert in -configs; this metapackage only pulls the runtime stack
+ (wayfire/waybar/fuzzel/foot/wlr-randr/iio-sensor-proxy).
  Notes: the 'decoration' plugin is deliberately omitted (it null-derefs the
- 0.18-backport wlroots xdg lifecycle and crashes on toplevel map); landscape
- touch is rotated via a volatile /run libinput calibration matrix installed by
- r7-switch-session only while wayfire is active, so phosh (portrait) is unaffected.
+ 0.18-backport wlroots xdg lifecycle and crashes on toplevel map). Landscape
+ rotation follows the accelerometer via r7-auto-rotate.service (net.hadess.
+ SensorProxy -> wlr-randr --transform); no touch calibration matrix is used or
+ needed, since wlroots already applies the output transform to absolute input
+ devices internally (a matrix layered on top double-rotates touch).
