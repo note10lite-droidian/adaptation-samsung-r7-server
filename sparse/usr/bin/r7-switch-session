@@ -64,6 +64,10 @@ activate_tty() {
 
 if [ "$TARGET" = "phosh" ]; then
   systemctl stop wayfire-test.service 2>/dev/null
+  # Kill stray wayfire-only layer-shell clients (waybar/foot). Normally they die
+  # with the wayfire cgroup, but anything launched outside it (e.g. over SSH)
+  # survives and re-attaches to phosh's wayland-0, drawing a panel on phosh.
+  pkill -x waybar 2>/dev/null; pkill -x fuzzel 2>/dev/null
   clear_calibration                 # restore identity touch for phosh (portrait)
   clear_seat0_sessions
   prime_composer
