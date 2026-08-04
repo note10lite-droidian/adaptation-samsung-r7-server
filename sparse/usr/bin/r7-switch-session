@@ -1,0 +1,83 @@
+#!/bin/sh
+# r7 (SM-N770F) compositor session switcher: phosh <-> wayfire-test.
+# Live compositor swap on the hwcomposer HAL. Key rules (see
+# r7-wayfire-hwcomposer-viable): NEVER restart the whole android container;
+# prime ONLY the composer HAL via `setprop ctl.restart`; phosh must be
+# runtime-masked (not just stopped) because its hwcomposer HAL wrapper drop-in
+# BindsTo=phosh.service; the new session must be loginctl-activated within
+# wlroots' ~10s internal timeout, so the poll loop runs in this one script.
+#
+# TOUCH CALIBRATION: wayfire runs LANDSCAPE (output transform 270) but this
+# wlroots/hwcomposer does NOT apply the output transform to absolute input, so
+# touch is rotated via a libinput calibration matrix. That matrix must NOT leak
+# into phosh (portrait) or it breaks phosh touch -> we install it as a VOLATILE
+# /run udev rule only while wayfire is the active session, and remove it when
+# returning to phosh.
+set -u
+TARGET="${1:-}"
+case "$TARGET" in phosh|wayfire-test) ;; *) echo "usage: $0 <phosh|wayfire-test>"; exit 1;; esac
+
+CALIB_RULE=/run/udev/rules.d/99-r7-touch-calibration.rules
+CALIB_MATRIX="0 1 0 -1 0 1"
+
+apply_calibration() {
+  mkdir -p /run/udev/rules.d
+  cat > "$CALIB_RULE" <<EOF
+# volatile: landscape (transform 270) touch rotation for the wayfire session.
+SUBSYSTEM=="input", ATTRS{name}=="sec_touchscreen", ENV{LIBINPUT_CALIBRATION_MATRIX}="$CALIB_MATRIX"
+SUBSYSTEM=="input", ATTRS{name}=="sec_e-pen", ENV{LIBINPUT_CALIBRATION_MATRIX}="$CALIB_MATRIX"
+EOF
+  udevadm control --reload-rules
+  udevadm trigger --subsystem-match=input
+}
+
+clear_calibration() {
+  rm -f "$CALIB_RULE"
+  udevadm control --reload-rules
+  udevadm trigger --subsystem-match=input
+}
+
+prime_composer() {
+  lxc-attach -n android -- setprop ctl.restart vendor.hwcomposer-2-2 2>/dev/null
+  sleep 2
+}
+
+clear_seat0_sessions() {
+  local s seat
+  for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+    seat=$(loginctl show-session "$s" -p Seat --value 2>/dev/null)
+    [ "$seat" = "seat0" ] && loginctl terminate-session "$s" 2>/dev/null
+  done
+}
+
+activate_tty() {
+  local want="$1" i s tty
+  for i in $(seq 1 40); do
+    for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+      tty=$(loginctl show-session "$s" -p TTY --value 2>/dev/null)
+      if [ "$tty" = "$want" ]; then loginctl activate "$s" 2>/dev/null; return 0; fi
+    done
+    sleep 0.25
+  done
+  return 1
+}
+
+if [ "$TARGET" = "phosh" ]; then
+  systemctl stop wayfire-test.service 2>/dev/null
+  clear_calibration                 # restore identity touch for phosh (portrait)
+  clear_seat0_sessions
+  prime_composer
+  rm -f /run/systemd/system/phosh.service 2>/dev/null; systemctl unmask phosh.service 2>/dev/null; systemctl daemon-reload
+  systemctl start phosh.service
+  echo "switched to phosh (touch calibration cleared)"
+else
+  systemctl mask --runtime phosh.service 2>/dev/null
+  systemctl stop phosh.service 2>/dev/null
+  clear_seat0_sessions
+  sleep 1
+  apply_calibration                 # landscape touch rotation, wayfire only
+  prime_composer
+  systemctl start wayfire-test.service
+  if activate_tty tty7; then echo "switched to wayfire-test (tty7 activated, calibration applied)"
+  else echo "wayfire-test started but tty7 session not activated in time"; fi
+fi

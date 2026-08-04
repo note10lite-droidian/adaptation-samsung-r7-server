@@ -1,0 +1,42 @@
+[Unit]
+Description=Wayfire desktop-shell session (r7)
+# Seat/VT setup modelled on phosh.service. Opt-in desktop mode; NOT enabled by
+# default (phosh remains the shipped session). Start/stop via r7-switch-session.
+Conflicts=phosh.service getty@tty7.service
+After=getty@tty7.service rc-local.service systemd-user-sessions.service
+After=lxc@android.service
+OnFailure=getty@tty1.service
+Before=graphical.target
+ConditionPathExists=/dev/tty0
+
+[Service]
+Environment=LANG=C.UTF-8
+Environment=XDG_CURRENT_DESKTOP=wayfire
+Environment=XDG_SESSION_DESKTOP=wayfire
+Environment=XDG_SESSION_TYPE=wayland
+# CRITICAL: libinput backend (not just hwcomposer) so wlroots sets up the seat;
+# without it xdg-toplevel windows crash on focus. EGL/HWC env mirror phosh.
+Environment=WLR_BACKENDS=hwcomposer,libinput
+Environment=EGL_PLATFORM=hwcomposer
+Environment=WLR_HWC_SKIP_VERSION_CHECK=1
+Environment=WLR_HWC_IDLE_TIME=12
+ExecStart=/usr/bin/wayfire -c %h/.config/wayfire.ini
+# Activate the VT so the logind session becomes active on seat0 (phosh does chvt 7).
+ExecStartPost=+chvt 7
+TimeoutStartSec=30
+User=droidian
+PAMName=login
+WorkingDirectory=~
+Restart=no
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=tty7
+UtmpMode=user
+
+[Install]
+WantedBy=graphical.target

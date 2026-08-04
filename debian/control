@@ -28,3 +28,23 @@ Depends: ${misc:Depends},
          gir1.2-gtk4layershell-1.0,
          libgtk4-layer-shell0,
 Description: Community adaptation for samsung-r7 - adaptation configurations
+
+Package: adaptation-samsung-r7-desktop
+Architecture: arm64
+Depends: ${misc:Depends},
+         adaptation-samsung-r7-configs (= ${binary:Version}),
+         wayfire,
+         waybar,
+         fuzzel,
+         foot,
+         wlr-randr,
+Description: Community adaptation for samsung-r7 - desktop-shell (wayfire) mode
+ Opt-in landscape desktop session for the r7 built on wayfire over the
+ hwcomposer-patched wlroots. NOT enabled by default (phosh stays the shipped
+ session); switch live with r7-switch-session. The config files (wayfire.ini,
+ waybar, wayfire-test.service, r7-switch-session) ship inert in -configs; this
+ metapackage only pulls the runtime stack (wayfire/waybar/fuzzel/foot/wlr-randr).
+ Notes: the 'decoration' plugin is deliberately omitted (it null-derefs the
+ 0.18-backport wlroots xdg lifecycle and crashes on toplevel map); landscape
+ touch is rotated via a volatile /run libinput calibration matrix installed by
+ r7-switch-session only while wayfire is active, so phosh (portrait) is unaffected.

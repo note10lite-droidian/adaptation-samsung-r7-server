@@ -8,3 +8,4 @@ debian/debhelper-build-stamp
 debian/adaptation-samsung-r7/
 debian/adaptation-samsung-r7-configs/
 debian/tmp/
+debian/adaptation-samsung-r7-desktop/
