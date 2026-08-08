@@ -13,10 +13,10 @@ Depends: ${misc:Depends},
          adaptation-samsung-r7-configs (= ${binary:Version}),
          openssh-server,
 Description: Community adaptation for samsung-r7 - metapackage
- Pulls openssh-server so a first flash always has a working SSH server. USB
- networking (RNDIS) is unreliable on this device and the base image ships no
- SSH server, which left a fresh install with no remote access at all; SSH over
- Wi-Fi is the dependable fallback.
+ Pulls openssh-server so a first flash always has a working SSH server. The
+ base image ships no SSH server at all, which left a fresh install with no
+ remote access; SSH over Wi-Fi is the dependable fallback regardless of USB
+ state.
 
 Package: adaptation-samsung-r7-configs
 Architecture: arm64
@@ -27,7 +27,12 @@ Depends: ${misc:Depends},
          gir1.2-adw-1,
          gir1.2-gtk4layershell-1.0,
          libgtk4-layer-shell0,
+         isc-dhcp-server,
 Description: Community adaptation for samsung-r7 - adaptation configurations
+ Pulls isc-dhcp-server for its dhcpd binary, invoked directly by mtp-server's
+ mtp-configfs script to serve an IP over the USB RNDIS gadget (10.15.19.0/24,
+ see /etc/hybris-usb/dhcpd.conf); the package's own generic
+ isc-dhcp-server.service is unused and disabled in postinst.
 
 Package: adaptation-samsung-r7-desktop
 Architecture: arm64

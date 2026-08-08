@@ -106,6 +106,25 @@ if [ "$1" = "configure" ]; then
     ln -sf /run/NetworkManager/resolv.conf /etc/resolv.conf || true
 fi
 
+# r7: USB RNDIS networking was completely non-functional. mtp-server's
+# mtp-configfs script (which runs automatically at every boot via
+# mtp-configfs@rndis.service, see android_boot_completed.service) bails out
+# immediately - regardless of requested mode - unless
+# /usr/lib/droidian/device/mtp-supported exists; nothing shipped it. Once
+# unblocked, the script also invokes /usr/sbin/dhcpd directly (not via the
+# isc-dhcp-server package's own service - that one stays unused/disabled
+# below) to serve an IP on the gadget interface, using
+# /etc/hybris-usb/dhcpd.conf. Both files now ship in this package (see the
+# isc-dhcp-server Depends in control). Proven live end-to-end 2026-08-08
+# (RNDIS up, DHCP lease handed out, SSH over USB) - GUNLUK G1.30.
+#
+# The isc-dhcp-server package's own generic isc-dhcp-server.service tries to
+# start against /etc/dhcp/dhcpd.conf (no interface configured there) and
+# fails at every boot; disable it, we only need the dhcpd binary.
+if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl disable --now isc-dhcp-server.service 2>/dev/null || true
+fi
+
 #DEBHELPER#
 
 exit 0
