@@ -147,13 +147,16 @@ class SetupLock(Adw.Application):
         LayerShell.set_exclusive_zone(win, -1)
         LayerShell.set_keyboard_mode(win, LayerShell.KeyboardMode.EXCLUSIVE)
 
-        win.set_title("Setting up your device")
+        win.set_title("Preparing your device")
         win.set_default_size(360, 720)
 
         self.status = Adw.StatusPage()
         self.status.set_icon_name("preferences-other-symbolic")
-        self.status.set_title("Setting up your device")
-        self.status.set_description("This only happens once.")
+        self.status.set_title("Preparing your device")
+        self.status.set_description(
+            "This only happens once. Device setup (language, Wi-Fi, "
+            "account) follows next."
+        )
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
         box.set_halign(Gtk.Align.CENTER)
@@ -166,7 +169,7 @@ class SetupLock(Adw.Application):
         box.append(self.progress)
 
         # Hidden until every probe passes.
-        self.done_btn = Gtk.Button(label="Start using your phone")
+        self.done_btn = Gtk.Button(label="Begin setup")
         self.done_btn.add_css_class("pill")
         self.done_btn.add_css_class("suggested-action")
         self.done_btn.set_halign(Gtk.Align.CENTER)
@@ -190,8 +193,10 @@ class SetupLock(Adw.Application):
         total = len(PROBES)
         self.progress.set_fraction(passed / total)
         if passed >= total:
-            self.status.set_title("Your phone is ready")
-            self.status.set_description("Setup is complete.")
+            self.status.set_title("Device patching done")
+            self.status.set_description(
+                "Next: language, Wi-Fi, and account setup."
+            )
             self.done_btn.set_visible(True)
             return False
         return True

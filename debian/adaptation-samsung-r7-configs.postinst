@@ -64,13 +64,28 @@ if [ "$1" = "configure" ]; then
     fi
 fi
 
-# r7: first-boot setup lock (OOBE). Enable the .path unit for all users; it
-# waits for GNOME Initial Setup to finish, then starts the lock, which holds a
-# wlr-layer-shell overlay (blocking the panel and all gestures) until every
-# runtime patch of the port has settled, then lets the user in. Enabling the
-# .path (not the .service) is deliberate — the path sequences it after GIS.
+# r7: first-boot setup lock (OOBE). Enable the .service directly at
+# graphical-session start; it holds a wlr-layer-shell overlay (blocking the
+# panel and all gestures) until every runtime patch of the port has settled,
+# then lets the user in.
+#
+# WAS gated behind r7-setup-lock.path (PathExists=~/.config/
+# gnome-initial-setup-done), on the assumption GIS finishes first and the
+# probes need its Wi-Fi step for DNS. Both premises turned out false: the DNS
+# probe was already dropped (+r7setup2, GUNLUK G1.18) so nothing here needs
+# network; and gnome-initial-setup's "--existing-user" first-login mode
+# writes that marker within ~2s of session start, not at real completion
+# (verified live 2026-08-08, GUNLUK G1.30) — so the .path fired almost
+# immediately anyway, then kept re-arming every time the (permanently true)
+# marker was re-touched, hitting systemd's trigger-limit and disabling
+# itself. The lock's own OVERLAY layer already sits above and hides GIS's
+# window regardless of firing order, so there was never real sequencing
+# benefit — just an unreliable, log-spamming proxy for "session start".
+# Disable a leftover enablement from an older package version, then enable
+# the .service.
 if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
-    systemctl --global enable r7-setup-lock.path || true
+    systemctl --global disable r7-setup-lock.path 2>/dev/null || true
+    systemctl --global enable r7-setup-lock.service || true
 fi
 
 # r7: repoint /etc/resolv.conf at NetworkManager's resolv.conf.
