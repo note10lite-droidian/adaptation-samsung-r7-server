@@ -138,6 +138,22 @@ if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
     systemctl disable --now isc-dhcp-server.service 2>/dev/null || true
 fi
 
+# r7: make the systemd journal persistent (survive reboots/crashes).
+#
+# WHY: the base image ships /usr/lib/systemd/journald.conf.d/10-journald-
+# volatile.conf (Storage=volatile, "non-development installations do not
+# store logs, to avoid disk wear"), so journald only ever wrote to tmpfs
+# (/run/log/journal). Any boot that crashed or was power-cycled before we
+# could pull logs over SSH lost everything from that boot - including a
+# fresh-flash first-boot hang with a totally black/unresponsive screen that
+# we could not diagnose afterward (2026-08-08). Force Storage=persistent so
+# every boot's journal lands in /var/log/journal and survives past a crash
+# or reboot; flush the current runtime journal to disk immediately so this
+# takes effect without waiting for the next journald restart.
+if [ "$1" = "configure" ] && command -v journalctl >/dev/null 2>&1; then
+    journalctl --flush 2>/dev/null || true
+fi
+
 #DEBHELPER#
 
 exit 0
