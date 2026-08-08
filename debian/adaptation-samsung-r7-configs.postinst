@@ -64,6 +64,19 @@ if [ "$1" = "configure" ]; then
     fi
 fi
 
+# r7: audio sink volume persistence. Stock PulseAudio's module-stream-restore
+# only subscribes to PA_SUBSCRIPTION_MASK_SINK_INPUT|SOURCE_OUTPUT (checked
+# against the actual v14.2 source) - it never tracks a sink's own device
+# volume, only per-application stream volumes, so the volume phosh's slider
+# sets falls back to the droid-sink's Base Volume (100%) on every PulseAudio
+# restart/reboot. r7-volume-save watches `pactl subscribe` and persists sink
+# volume changes; r7-volume-restore applies the saved value (or a 70% default)
+# at PulseAudio startup. Proven live 2026-08-08 across two full
+# change/restart/verify cycles (GUNLUK G1.36).
+if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl --global enable r7-volume-save.service r7-volume-restore.service || true
+fi
+
 # r7: first-boot setup lock (OOBE). Enable the .service directly at
 # graphical-session start; it holds a wlr-layer-shell overlay (blocking the
 # panel and all gestures) until every runtime patch of the port has settled,

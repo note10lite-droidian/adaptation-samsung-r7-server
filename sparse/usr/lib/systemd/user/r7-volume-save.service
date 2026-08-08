@@ -1,0 +1,13 @@
+[Unit]
+Description=r7: persist audio sink volume changes
+PartOf=pulseaudio.service
+After=pulseaudio.service
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/r7-volume-save
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=pulseaudio.service

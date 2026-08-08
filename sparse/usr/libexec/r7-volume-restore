@@ -1,0 +1,32 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# r7: apply the last-saved sink volume at PulseAudio startup.
+#
+# WHY: stock PulseAudio's module-stream-restore only subscribes to
+# PA_SUBSCRIPTION_MASK_SINK_INPUT|PA_SUBSCRIPTION_MASK_SOURCE_OUTPUT (verified
+# against the actual v14.2 source) - it never tracks or persists a sink's own
+# device volume, only per-application stream volumes. There is no code path
+# in it for a "sink:<name>" entry at all. So the sink volume phosh's slider
+# changes falls back to the droid-sink's reported Base Volume (100%) on every
+# PulseAudio restart/reboot, with nothing to blame in the droid HAL or in our
+# own config - this is stock upstream behavior on any device using real
+# PulseAudio instead of PipeWire+WirePlumber (which persists default sink
+# volume differently). Paired with r7-volume-save (usr/lib/systemd/user/),
+# which watches `pactl subscribe` for sink volume changes and writes them
+# here.
+
+STATE="$HOME/.local/state/r7-volume"
+DEFAULT=70
+
+vol="$DEFAULT"
+if [ -f "$STATE" ]; then
+    saved="$(cat "$STATE" 2>/dev/null)"
+    case "$saved" in
+        ''|*[!0-9]*) ;;
+        *) vol="$saved" ;;
+    esac
+fi
+
+for sink in sink.primary-out sink.fast; do
+    pactl set-sink-volume "$sink" "${vol}%" 2>/dev/null || true
+done
