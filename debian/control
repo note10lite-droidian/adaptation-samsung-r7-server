@@ -28,11 +28,20 @@ Depends: ${misc:Depends},
          gir1.2-gtk4layershell-1.0,
          libgtk4-layer-shell0,
          isc-dhcp-server,
+         usbmuxd,
 Description: Community adaptation for samsung-r7 - adaptation configurations
  Pulls isc-dhcp-server for its dhcpd binary, invoked directly by mtp-server's
  mtp-configfs script to serve an IP over the USB RNDIS gadget (10.15.19.0/24,
  see /etc/hybris-usb/dhcpd.conf); the package's own generic
  isc-dhcp-server.service is unused and disabled in postinst.
+ .
+ Pulls usbmuxd so USB-connected iOS devices (e.g. tethering to an iPhone's
+ Personal Hotspot) get past the default PTP-only USB configuration: usbmuxd's
+ own udev rule (39-usbmuxd.rules) activates it automatically on Apple vendor
+ ID match, negotiates the device into its full configuration (PTP + Apple
+ Mobile Device + Apple USB Ethernet), and ipheth (built into the kernel)
+ binds the Ethernet interface from there - no adaptation-side wiring needed
+ beyond having the package installed.
 
 Package: adaptation-samsung-r7-desktop
 Architecture: arm64

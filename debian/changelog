@@ -1,3 +1,34 @@
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop2+r7usb1+r7ios1) bookworm; urgency=medium
+
+  * Fix consuming an iPhone's Personal Hotspot over USB. Root cause: the
+    iPhone enumerates in a default PTP-only USB configuration (one
+    interface, matches the "allow access to photos" prompt) until usbmuxd
+    negotiates the lockdown/pairing handshake and the device switches to
+    its full "PTP + Apple Mobile Device + Apple USB Ethernet"
+    configuration - only then does ipheth (already built into this kernel)
+    have an interface to bind. usbmuxd wasn't installed (only its client
+    libraries were, pulled in transitively); its own udev rule
+    (39-usbmuxd.rules) auto-activates it on Apple vendor ID match, so
+    installing the package is the entire fix, no adaptation-side
+    wiring needed. Proven live end-to-end 2026-08-08: after installing
+    usbmuxd and accepting the iPhone's Trust prompt, ipheth bound, DHCP
+    lease from the phone's 172.20.10.0/28 hotspot subnet, ping and general
+    internet access confirmed over the USB link (GUNLUK G1.32).
+  * Bump the default outgoing IP TTL 64 -> 65 (net.ipv4.ip_default_ttl,
+    system-wide). When this device consumes another phone's
+    tethering/Personal Hotspot (iPhone, over USB ipheth above or Bluetooth
+    PAN), the tethering phone forwards our packets and decrements TTL by
+    one hop; carriers can fingerprint that as tethered/shared usage and
+    bill or throttle differently. Shipping TTL 65 means it reads as the
+    phone's own native 64 by the time it reaches the carrier. Global
+    rather than interface-scoped: ipheth's interface name is MAC-derived
+    per iPhone (no stable name to match), Bluetooth PAN uses bnep0, and
+    TTL 65 has no functional downside on any other path (Wi-Fi, mobile
+    data) - a system-wide default is the non-fragile choice over
+    interface-matching iptables/nftables rules.
+
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Sat, 08 Aug 2026 16:30:00 +0300
+
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop2+r7usb1) bookworm; urgency=medium
 
   * Fix USB RNDIS networking, which was completely non-functional (only
