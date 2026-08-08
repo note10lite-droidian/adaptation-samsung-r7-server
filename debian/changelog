@@ -1,3 +1,24 @@
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop2+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh1) bookworm; urgency=medium
+
+  * Fix the fresh-flash black-screen-forever hang. Root cause, traced live
+    2026-08-08 via a persistent-journal capture of the exact hung boot:
+    phoc's libseat session-activation wait (hardcoded ~10s, not
+    configurable) timed out under a heavily-loaded first boot (audio/WiFi/
+    modem/sensor errors firing concurrently), so phoc failed to create a
+    backend and exited. That alone is recoverable (phosh.service has
+    Restart=always/RestartSec=5s), but stock phosh.service also has
+    OnFailure=getty@tty1.service + Conflicts=getty@tty1.service - once the
+    OnFailure fallback starts a getty, Conflicts= permanently blocks
+    phosh.service's own restart attempts for the rest of that boot (zero
+    restarts observed in the 107s window following the failure, though
+    RestartSec=5s should have produced ~20). Screen stays black and fully
+    unresponsive - no compositor is running to receive input - until a
+    full reboot gives phosh an unconflicted attempt. Drop the Conflicts=
+    via a service.d override so Restart=always can actually self-heal;
+    keep OnFailure= as a debug console for genuinely persistent failures.
+
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Sat, 08 Aug 2026 20:30:00 +0300
+
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop2+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2) bookworm; urgency=medium
 
   * Fix sshd taking minutes to start listening on a fresh flash, which
