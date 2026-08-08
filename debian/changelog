@@ -1,3 +1,18 @@
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop2+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2) bookworm; urgency=medium
+
+  * Remove 70-r7-no-getty-conflict.conf (+r7phosh1's phosh.service.d
+    drop-in). Confirmed live (2026-08-08) that an empty `Conflicts=`
+    assignment in a service.d override does NOT clear the inherited
+    Conflicts=getty@tty1.service from phosh.service's own unit file, even
+    after `systemctl daemon-reload` - `systemctl show phosh.service -p
+    Conflicts` kept showing getty@tty1.service, and manually starting
+    getty@tty1.service actually stopped phosh.service, proving the
+    conflict was still enforced. The real fix now lives in the phosh
+    package itself (r7 fork, +r7phosh1: Conflicts=getty@tty1.service
+    removed at the source), where it's confirmed to work.
+
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Sat, 08 Aug 2026 22:15:00 +0300
+
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop2+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh1) bookworm; urgency=medium
 
   * Fix the fresh-flash black-screen-forever hang. Root cause, traced live
