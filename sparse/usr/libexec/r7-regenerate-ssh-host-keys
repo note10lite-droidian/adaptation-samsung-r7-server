@@ -5,13 +5,24 @@
 # host keys inside the image build chroot. Without this, every flashed device
 # would ship the SAME baked-in host keys (a public image => trivial MITM). Wipe
 # them once, generate fresh per-device keys, and stamp so this never runs again.
+#
+# WHY ed25519+ecdsa only, not `ssh-keygen -A` (which also does RSA): this
+# service gates ssh.service/ssh.socket (Before=, see the .service file) and
+# there is no haveged/rng-tools on this image, so on a genuinely fresh flash
+# (zero accumulated kernel entropy) RSA key generation stalled sshd's actual
+# listen-and-accept by minutes - traced live 2026-08-08 via a NetworkManager/
+# sshd_config/nftables dead-end (all found unrestricted) before landing on
+# this service's ordering. ed25519/ecdsa need negligible entropy and generate
+# near-instantly even at zero entropy; sshd_config has no RequiredRSASize or
+# similar that needs an RSA host key to be present.
 set -eu
 
 STAMP=/var/lib/r7-ssh-hostkeys-regenerated
 [ -e "$STAMP" ] && exit 0
 
 rm -f /etc/ssh/ssh_host_*
-ssh-keygen -A
+ssh-keygen -q -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -N ''
+ssh-keygen -q -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key -N ''
 
 mkdir -p "$(dirname "$STAMP")"
 : > "$STAMP"
