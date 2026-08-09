@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: adaptation-samsung-r7
-Source: <PLEASE_FILL_HERE>
+Source: https://github.com/note10lite-droidian/adaptation-samsung-r7
 
 Files: *
 Copyright: 2026 Yunus Tan <yunus.tan@outlook.com.tr>
