@@ -1,0 +1,11 @@
+# r7 (+r7apt1): make this port's own repo win over the official Droidian
+# repo (pinned at 1002 in /etc/apt/preferences.d/10-droidian) whenever both
+# carry a package with the same name - a patched phosh must never lose to
+# stock phosh just because the stock one happens to compare as "newer".
+#
+# Matches /etc/apt/preferences.d/droidian-internal-repository.pref's own
+# priority (1100), which does the same thing for the build-time-only local
+# repository; this is the on-device, permanent equivalent.
+Package: *
+Pin: origin raw.githubusercontent.com
+Pin-Priority: 1100

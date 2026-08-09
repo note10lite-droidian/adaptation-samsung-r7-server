@@ -1,3 +1,28 @@
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop2+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
+
+  * Populate community-samsung-r7.list with this port's own apt overlay
+    (https://raw.githubusercontent.com/note10lite-droidian/droidian-samsung-r7/droidian-101/apt/,
+    signed with the key this package already ships at
+    /etc/apt/trusted.gpg.d/community-samsung-r7.gpg) and add a matching
+    1100-priority pin (50-community-samsung-r7.pref), so it always beats
+    the official Droidian repo (pinned 1002) for a same-named package.
+    Root cause traced live 2026-08-09: the file had shipped as an EMPTY
+    template since this port's very first commit, so no apt operation on a
+    real device ever saw our patched packages after the image-build's own
+    transient /var/lib/droidian-internal-repository was torn down at the
+    end of the build (by design, in rootfs-templates' polish.yaml). Any
+    later apt refresh - a PackageKit background check, "check for
+    updates", or a plain apt upgrade - only ever saw the official repo and
+    silently "upgraded" phosh/phosh-plugins/phosh-common back to stock,
+    losing +r7clock1/+r7mon1/+r7phosh1 in the process. Confirmed on a
+    device that had supposedly shipped with the black-screen-forever fix:
+    phosh.service was back to stock Conflicts=getty@tty1.service, and
+    top-panel.ui had no trace of the clock-position patch, despite dpkg.log
+    showing the correctly patched versions configured during the image
+    build itself.
+
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Sun, 09 Aug 2026 10:30:00 +0300
+
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop2+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2) bookworm; urgency=medium
 
   * Remove 70-r7-no-getty-conflict.conf (+r7phosh1's phosh.service.d

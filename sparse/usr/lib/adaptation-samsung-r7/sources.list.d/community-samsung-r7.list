@@ -1,1 +1,14 @@
 # You can add here your custom apt repositories
+
+# r7 (+r7apt1): this port's own patched-package overlay. Without this, any
+# apt operation (a background PackageKit refresh, a manual "check for
+# updates", or a plain `apt upgrade`) only sees the official Droidian repo,
+# which happily "upgrades" our patched phosh/clock/scale-persistence/etc.
+# packages back down to stock the moment a matching name exists there -
+# traced live 2026-08-09 after a user report that a system update reset the
+# clock-position fix, and confirmed by finding phosh.service back at its
+# stock Conflicts=getty@tty1.service (the black-screen-forever fix) on a
+# device that had supposedly shipped with it patched. Signed with the key at
+# /etc/apt/trusted.gpg.d/community-samsung-r7.gpg (this package ships it),
+# so no [trusted=yes] is needed.
+deb https://raw.githubusercontent.com/note10lite-droidian/droidian-samsung-r7/droidian-101/apt/ ./

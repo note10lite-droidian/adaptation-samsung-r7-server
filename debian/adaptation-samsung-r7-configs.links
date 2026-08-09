@@ -1,2 +1,3 @@
 /usr/lib/adaptation-samsung-r7/sources.list.d/community-samsung-r7.list /etc/apt/sources.list.d/community-samsung-r7.list
 /usr/lib/adaptation-samsung-r7/trusted.gpg.d/community-samsung-r7.gpg /etc/apt/trusted.gpg.d/community-samsung-r7.gpg
+/usr/lib/adaptation-samsung-r7/preferences.d/50-community-samsung-r7.pref /etc/apt/preferences.d/50-community-samsung-r7.pref
