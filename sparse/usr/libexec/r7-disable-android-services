@@ -1,0 +1,70 @@
+#!/bin/bash
+# r7-server: stop the Android-side HAL/app services this image doesn't use
+# (camera, biometrics, NFC, media framework, telephony, GNSS).
+#
+# Generalizes the pattern proven live for ril-daemon alone (see GUNLUK /
+# r7-disable-rild.service on the phone image) to the full Phase 2 audit
+# list. Verified against real property names on-device before writing this
+# (not guessed) - see PLAN.md's Phase 2 execution notes.
+#
+# IMPORTANT LIMITATION, not a bug: these services start via stock Android
+# .rc triggers baked into the vendor/system partitions, which this project
+# does not rebuild. There is no property gating to prevent them starting in
+# the first place (confirmed for ril-daemon; assumed to hold for the rest,
+# not individually re-verified). So this is start-then-stop, not
+# prevention - each service is briefly live before being stopped. Real
+# removal (no startup window at all) needs kernel/vendor-level driver
+# removal, which is a separate, deliberately later pass (see PLAN.md
+# Phase 2's kernel-scope decision) - this script only closes the gap that's
+# reachable without touching the kernel this pass.
+
+SERVICES="
+camera_service
+sec-camera-provider-4-0
+sec-biometrics-face-aidl
+vendor.fps_hal
+gatekeeperd
+vendor.gatekeeper-1-0
+vaultkeeper
+vaultkeeper_hal
+nfc_hal_service
+media.swcodec
+mediaextractor
+mediametrics
+minimedia
+samsung-software-media-c2-hal-1-0
+vendor.media.omx
+sec-vibrator-2-2
+vendor.samsung.hardware.light-default
+cpboot-daemon
+sim_config
+ril-daemon
+gpsd
+sec_gnss_service
+"
+
+remaining="$SERVICES"
+for i in $(seq 1 40); do
+    still=""
+    for svc in $remaining; do
+        state=$(lxc-attach -n android -- getprop init.svc.$svc 2>/dev/null)
+        case "$state" in
+            running)
+                lxc-attach -n android -- setprop ctl.stop "$svc" 2>/dev/null
+                ;;
+            stopped)
+                # already stopped (e.g. sim_config/ril-daemon are often
+                # stopped before this even runs) - nothing to do
+                ;;
+            *)
+                # property not observed yet - service hasn't started, keep
+                # watching for it within the bounded wait window
+                still="$still $svc"
+                ;;
+        esac
+    done
+    remaining="$still"
+    [ -z "$remaining" ] && break
+    sleep 1
+done
+exit 0
