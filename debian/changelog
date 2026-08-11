@@ -1,3 +1,29 @@
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop10+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
+
+  * Two idle timeouts, both confirmed live with short test values before
+    landing on their real ones:
+    - Console session idle-logout (60s). r7-console-login no longer
+      `exec`s `su -` - it calls it normally so the wrapper is still alive
+      when the shell exits (idle timeout or a normal `exit`), and loops
+      back to the login prompt instead of tearing down the whole
+      phoc/waybar/OSK session. New /etc/profile.d/r7-console-idle-timeout.sh
+      sets bash's native TMOUT=60, scoped to the console only (skipped
+      when $SSH_CONNECTION is set, so SSH sessions are unaffected - an
+      idle SSH session is a different, already-covered threat model).
+      An on-bar countdown display was tried and then deliberately
+      dropped by request - the underlying timeout stayed.
+    - Display auto-off after 120s of no touch/button activity
+      (r7-hw-buttons, extended to also watch the touchscreen device via
+      select() alongside gpio_keys). Touch only resets the timer while
+      the display is already on - it deliberately does NOT wake the
+      display back up, matching normal phone behaviour where only the
+      power button wakes a screen-off device. Brightness needs no extra
+      "memory" handling for this: confirmed live it's untouched by a
+      decon power-mode cycle, and systemd-backlight@backlight:panel
+      already persists it across reboots.
+
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 21:26:00 +0300
+
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop9+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
 
   * Power button now toggles the display off/on (r7-volume-to-brightness

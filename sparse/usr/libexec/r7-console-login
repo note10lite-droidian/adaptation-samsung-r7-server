@@ -1,11 +1,18 @@
 #!/bin/bash
 # r7-server: runs as root (via a narrowly-scoped sudo rule for droidian -
-# see sparse/etc/sudoers.d/r7-console-login). Verifies credentials via
+# see the r7-console-login sudoers.d drop-in). Verifies credentials via
 # pamtester (PAM authenticate only, no tty/session ownership), then hands
 # off via `su -` - run by root, su never re-prompts and (unlike /bin/login)
 # doesn't do vhangup()/session-leader tricks, which crashed the whole
 # compositor session when tried nested inside a Wayland pty (confirmed
 # live 2026-08-11).
+#
+# Deliberately NOT `exec su -`: the idle timeout (TMOUT, set for console
+# sessions only in /etc/profile.d/r7-console-idle-timeout.sh) works by
+# bash exiting itself when idle at the prompt. Without exec, this script
+# is still alive underneath when that happens (or on a normal `exit`) and
+# the while loop below just re-prompts - a lightweight return to the
+# login prompt, not a full phoc/waybar/OSK session restart.
 read_password() {
     local pass="" char
     while IFS= read -r -s -n1 char; do
@@ -33,7 +40,9 @@ while true; do
     printf '\n'
     if printf '%s' "$password" | pamtester login "$username" authenticate >/dev/null 2>&1; then
         unset password
-        exec su - "$username"
+        su - "$username"
+        printf '\n'
+        continue
     fi
     unset password
     printf 'Authentication failed\n\n'
