@@ -1,13 +1,19 @@
 [Unit]
-Description=Wayfire desktop-shell session (r7)
-# Seat/VT setup modelled on phosh.service. Opt-in desktop mode; NOT enabled by
-# default (phosh remains the shipped session). Start/stop via r7-switch-session.
+Description=Wayfire desktop-shell session (r7-server)
+# Seat/VT setup modelled on phosh.service. r7-server: this is the DEFAULT and
+# ONLY session (phosh isn't in this image at all) - enabled at boot, not
+# started via r7-switch-session.
 Conflicts=phosh.service getty@tty7.service
 After=getty@tty7.service rc-local.service systemd-user-sessions.service
 After=lxc@android.service
 OnFailure=getty@tty1.service
 Before=graphical.target
 ConditionPathExists=/dev/tty0
+# No session fallback by design (user decision): if wayfire dies, restart it,
+# forever. StartLimitIntervalSec=0 disables systemd's default rate limiter
+# (5 starts / 10s, after which it would give up permanently and leave the
+# device with no session at all).
+StartLimitIntervalSec=0
 
 [Service]
 Environment=LANG=C.UTF-8
@@ -20,14 +26,21 @@ Environment=WLR_BACKENDS=hwcomposer,libinput
 Environment=EGL_PLATFORM=hwcomposer
 Environment=WLR_HWC_SKIP_VERSION_CHECK=1
 Environment=WLR_HWC_IDLE_TIME=12
-ExecStart=/usr/bin/wayfire -c %h/.config/wayfire.ini
+# NOT %h - in a SYSTEM unit %h resolves to /root regardless of User=, so this
+# read /root/.config/wayfire.ini (nonexistent) and wayfire exited 0 instantly
+# with no output. Found live 2026-08-11 via `systemctl show -p ExecStart`.
+# Consequence on the phone image: the shipped service never read the tuned
+# wayfire.ini AT ALL - it silently ran wayfire's built-in defaults (which
+# include the crash-prone `decoration` plugin and lack `plamo`/scale/transform).
+ExecStart=/usr/bin/wayfire -c /home/droidian/.config/wayfire.ini
 # Activate the VT so the logind session becomes active on seat0 (phosh does chvt 7).
 ExecStartPost=+chvt 7
 TimeoutStartSec=30
 User=droidian
 PAMName=login
 WorkingDirectory=~
-Restart=no
+Restart=always
+RestartSec=2
 TTYPath=/dev/tty7
 TTYReset=yes
 TTYVHangup=yes

@@ -33,6 +33,37 @@ if [ "$1" = "configure" ] && [ -f "$SRC" ]; then
     done
 fi
 
+# r7-server: distribute wayfire.ini + waybar config the same way, and for the
+# exact same reason as default.pa above (/etc/skel never applies - the user
+# already exists by the time this package unpacks).
+#
+# On the phone image this gap was invisible: wayfire was opt-in, and the
+# service was ALSO passing a wrong config path (%h -> /root, fixed in
+# wayfire-test.service), so nothing ever read these files anyway. Here wayfire
+# is the only session, so a missing config means booting into wayfire's
+# built-in defaults - which include the `decoration` plugin that segfaults
+# this wlroots on the first window, and omit `plamo` (no tap/click on
+# layer-shell surfaces), the HiDPI scale, and the portrait transform.
+if [ "$1" = "configure" ]; then
+    for home in /home/*; do
+        [ -d "$home" ] || continue
+        user="$(basename "$home")"
+        id "$user" >/dev/null 2>&1 || continue
+
+        for rel in wayfire.ini waybar/config waybar/style.css; do
+            src="/etc/skel/.config/$rel"
+            dest="$home/.config/$rel"
+            [ -f "$src" ] || continue
+            # If the user customised it, LEAVE IT ALONE
+            if [ ! -e "$dest" ]; then
+                mkdir -p "$(dirname "$dest")"
+                cp "$src" "$dest"
+                chown -R "$user":"$(id -gn "$user")" "$home/.config"
+            fi
+        done
+    done
+fi
+
 # r7: camera backend. droidian-camera defaults to "aal", which is broken on
 # this device; "gst" works. The file is a CONFFILE of the droidian-camera
 # package, so it cannot be shipped via sparse/ (dpkg would fail with "trying
