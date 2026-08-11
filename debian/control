@@ -11,6 +11,7 @@ Architecture: arm64
 Depends: ${misc:Depends},
          adaptation-hybris-api33,
          adaptation-samsung-r7-configs (= ${binary:Version}),
+         adaptation-samsung-r7-desktop (= ${binary:Version}),
          openssh-server,
 Conflicts: droidian-phosh-minimal,
            droidian-minimal,
