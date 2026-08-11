@@ -1,0 +1,40 @@
+#!/bin/bash
+# r7-server: runs as root (via a narrowly-scoped sudo rule for droidian -
+# see sparse/etc/sudoers.d/r7-console-login). Verifies credentials via
+# pamtester (PAM authenticate only, no tty/session ownership), then hands
+# off via `su -` - run by root, su never re-prompts and (unlike /bin/login)
+# doesn't do vhangup()/session-leader tricks, which crashed the whole
+# compositor session when tried nested inside a Wayland pty (confirmed
+# live 2026-08-11).
+read_password() {
+    local pass="" char
+    while IFS= read -r -s -n1 char; do
+        if [ -z "$char" ]; then
+            break
+        elif [[ "$char" == $'\x7f' ]]; then
+            if [ -n "$pass" ]; then
+                pass="${pass%?}"
+                printf '\b \b'
+            fi
+        else
+            pass+="$char"
+            printf '*'
+        fi
+    done
+    password="$pass"
+}
+
+while true; do
+    printf 'r7 console login: '
+    read -r username
+    [ -n "$username" ] || continue
+    printf 'Password: '
+    read_password
+    printf '\n'
+    if printf '%s' "$password" | pamtester login "$username" authenticate >/dev/null 2>&1; then
+        unset password
+        exec su - "$username"
+    fi
+    unset password
+    printf 'Authentication failed\n\n'
+done

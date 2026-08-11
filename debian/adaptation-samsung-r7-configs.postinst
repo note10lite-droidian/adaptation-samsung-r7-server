@@ -137,6 +137,15 @@ if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
     systemctl enable r7-volume-to-brightness.service || true
 fi
 
+# r7-server: sudoers.d files MUST be mode 0440 or sudo/visudo refuses them
+# outright ("bad permissions") - confirmed live. git only tracks the
+# executable bit (644/755), not exact modes, so sparse/ alone can't carry
+# 0440 through a fresh checkout; enforce it here instead, same pattern as
+# authorized_keys below.
+if [ "$1" = "configure" ] && [ -f /etc/sudoers.d/r7-console-login ]; then
+    chmod 0440 /etc/sudoers.d/r7-console-login
+fi
+
 # r7: repoint /etc/resolv.conf at NetworkManager's resolv.conf.
 #
 # WHY: the rootfs ships /etc/resolv.conf as a symlink to the systemd-resolved

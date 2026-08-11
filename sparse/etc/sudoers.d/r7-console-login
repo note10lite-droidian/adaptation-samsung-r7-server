@@ -1,0 +1,5 @@
+# r7-server: lets the console login gate (running as droidian, since the
+# whole phoc session runs as droidian) hand off to root just long enough
+# to verify a password against ANY local account and su into it. Scoped
+# to this exact script only - not general sudo access.
+droidian ALL=(root) NOPASSWD: /usr/libexec/r7-console-login

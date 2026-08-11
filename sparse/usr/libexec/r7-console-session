@@ -7,10 +7,15 @@
 #
 # phosh-osk-stub warns it can't register with org.gnome.SessionManager
 # (nothing provides that in this image) - harmless, it still comes up and
-# registers its own sm.puri.OSK0 DBus interface fine. foot (a terminal)
-# doesn't do text-input-v3 field-focus like GTK apps do, so the OSK never
-# auto-shows for it; the waybar K button (r7-osk-toggle) is the deliberate
-# manual replacement for that automatic behaviour.
+# registers its own sm.puri.OSK0 DBus interface fine. foot DOES implement
+# zwp_text_input_v3 (confirmed live, unlike an earlier assumption here that
+# it wouldn't) and the OSK does correctly detect terminal purpose from it -
+# but it still doesn't auto-*show* on its own, so the waybar K button
+# (r7-osk-toggle) stays the manual way to bring it up.
+#
+# foot's own child is r7-console-login, not a shell directly - the console
+# is gated behind a real credential check (see that script's own notes on
+# why it's pamtester+su, not /bin/login).
 waybar &
 phosh-osk-stub --allow-replacement &
-exec foot
+exec foot -e sudo /usr/libexec/r7-console-login

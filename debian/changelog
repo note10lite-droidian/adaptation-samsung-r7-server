@@ -1,3 +1,34 @@
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop8+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
+
+  * Console now gated behind a real credential check instead of handing
+    over an already-authenticated shell on boot - physical access to the
+    device no longer bypasses authentication the way SSH already
+    requires it (key + TOTP). New /usr/libexec/r7-console-login prompts
+    for any local username (not hardcoded to droidian) with masked
+    password entry, verifies via pamtester (PAM authenticate only), and
+    on success hands off via `su -`.
+    Deliberately NOT /bin/login: tried it first
+    (foot -e login, phoc still running as droidian) and it crashed the
+    entire compositor session within seconds, confirmed live via
+    journalctl showing a repeating Start/SIGKILL loop - login expects to
+    own/manage a real tty (vhangup, session leader, etc.) and doesn't
+    tolerate being nested inside a Wayland pty. su, run by root, neither
+    re-prompts nor does any of that tty ownership, and was confirmed
+    live to bring up a stable session.
+    Switching users needs root (setuid), which the droidian-owned
+    session doesn't have - added a narrowly-scoped sudoers.d rule
+    (droidian NOPASSWD for this exact script only, not general sudo) so
+    foot's child process can hand off to root just long enough to check
+    the password and su. New pamtester dependency.
+    One real packaging gotcha hit and fixed: sudoers.d files must be
+    mode 0440 or sudo refuses them outright ("bad permissions") -
+    confirmed live with visudo -c. git only tracks the executable bit
+    (644/755 - two states), not exact modes, so sparse/ alone can't
+    carry 0440 through a fresh checkout; postinst chmods it explicitly
+    instead, same pattern as authorized_keys.
+
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 20:35:00 +0300
+
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop7+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
 
   * Volume buttons remapped to backlight brightness (new
