@@ -130,6 +130,13 @@ if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
     systemctl enable phoc-console.service || true
 fi
 
+# r7-server: volume buttons -> backlight brightness. Nothing else consumes
+# gpio_keys' volume events in this headless console (no PulseAudio/
+# gsd-media-keys) - confirmed live they do nothing otherwise.
+if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl enable r7-volume-to-brightness.service || true
+fi
+
 # r7: repoint /etc/resolv.conf at NetworkManager's resolv.conf.
 #
 # WHY: the rootfs ships /etc/resolv.conf as a symlink to the systemd-resolved

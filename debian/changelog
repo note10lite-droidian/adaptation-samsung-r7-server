@@ -1,3 +1,34 @@
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop7+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
+
+  * Volume buttons remapped to backlight brightness (new
+    r7-volume-to-brightness.service, python3-evdev added to
+    adaptation-samsung-r7-desktop's Depends). Nothing in this headless
+    console consumes gpio_keys' volume events otherwise - no PulseAudio
+    volume UI, no gsd-media-keys - confirmed live they're a dead no-op
+    without this, so remapping doesn't fight anything for the keys.
+    Resolves the physical device by name ("gpio_keys"), not a hardcoded
+    /dev/input/eventN path, since event numbering isn't guaranteed
+    stable across boots (probe order) even though it was event6 on this
+    device when checked live.
+  * foot's console font down to size=7 (from foot's default size=8) for
+    more visible text on a small panel. Landed on 7, not smaller: a
+    size=6 test correlated with phosh-osk-stub's terminal shortcuts row
+    (arrows/PgUp/PgDn) no longer getting drawn after a session restart -
+    not conclusively proven causal (could have been restart-timing
+    instead), but 7 was confirmed live to keep the row working, so
+    staying there rather than re-risking it.
+  * Known limitation, not fixed (phosh-osk-stub bug, not ours to patch
+    from this recipe): the terminal shortcuts row's data model builds
+    correctly every time (confirmed via debug log - all configured
+    shortcuts get added, "Layout: terminal" detected correctly from
+    foot's own text-input-v3 purpose hint), but the OSK's layer-shell
+    surface height stays locked at the same value both before and after
+    terminal-mode detection - the row never gets any allocated screen
+    space, so it doesn't render at all rather than rendering compressed.
+    Plain letter input is unaffected.
+
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 20:15:00 +0300
+
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop6+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
 
   * On-screen keyboard: adaptation-samsung-r7-desktop now Depends on

@@ -81,6 +81,7 @@ Depends: ${misc:Depends},
          waybar,
          foot,
          phosh-osk-stub,
+         python3-evdev,
 Description: Community adaptation for samsung-r7-server - console session
  Default (only) desktop-shell session for the r7-server fork: bare phoc
  (no phosh shell) hosting foot as its single client, over the
