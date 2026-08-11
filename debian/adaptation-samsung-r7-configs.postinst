@@ -157,6 +157,41 @@ if [ "$1" = "configure" ] && command -v journalctl >/dev/null 2>&1; then
     journalctl --flush 2>/dev/null || true
 fi
 
+# r7-server: SSH access is key + TOTP, no password auth at all.
+#
+# /etc/pam.d/sshd is a conffile of openssh-server (dpkg -S confirms it);
+# /etc/ssh/sshd_config isn't tracked by dpkg on this image at all, but
+# treated the same way regardless — same reasoning as the droidian-camera.conf
+# patch above: sparse/ can't ship either path without dpkg refusing to
+# overwrite (or, for sshd_config, without clobbering whatever generated it).
+# Patch in place instead, idempotently (grep-guarded, safe to run on every
+# package upgrade, not just first install).
+#
+# pam.d/sshd: swap @include common-auth (password check) for
+# pam_google_authenticator.so. `nullok` is required, not optional here: it's
+# what lets a brand new device boot without a chicken-and-egg lockout before
+# anyone has run `google-authenticator` yet. Once a user creates
+# ~/.google_authenticator, PAM starts requiring a valid code from them
+# specifically — nullok only bypasses the check when no secret file exists.
+if [ "$1" = "configure" ] && [ -f /etc/pam.d/sshd ]; then
+    if ! grep -q "pam_google_authenticator.so" /etc/pam.d/sshd; then
+        sed -i 's/^@include common-auth/#&\nauth       required     pam_google_authenticator.so nullok/' /etc/pam.d/sshd
+    fi
+fi
+
+# sshd_config: enable keyboard-interactive (carries the TOTP prompt), turn
+# off password auth explicitly (don't rely on the commented-out default),
+# and require both factors together rather than either one alone.
+if [ "$1" = "configure" ] && [ -f /etc/ssh/sshd_config ]; then
+    sed -i \
+        -e 's/^KbdInteractiveAuthentication no/KbdInteractiveAuthentication yes/' \
+        -e 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' \
+        /etc/ssh/sshd_config
+    if ! grep -q "^AuthenticationMethods" /etc/ssh/sshd_config; then
+        echo "AuthenticationMethods publickey,keyboard-interactive" >> /etc/ssh/sshd_config
+    fi
+fi
+
 #DEBHELPER#
 
 exit 0

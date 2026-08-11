@@ -51,6 +51,8 @@ Depends: ${misc:Depends},
          libgtk4-layer-shell0,
          isc-dhcp-server,
          usbmuxd,
+         libpam-google-authenticator,
+         oathtool,
 Description: Community adaptation for samsung-r7 - adaptation configurations
  Pulls isc-dhcp-server for its dhcpd binary, invoked directly by mtp-server's
  mtp-configfs script to serve an IP over the USB RNDIS gadget (10.15.19.0/24,
@@ -64,6 +66,12 @@ Description: Community adaptation for samsung-r7 - adaptation configurations
  Mobile Device + Apple USB Ethernet), and ipheth (built into the kernel)
  binds the Ethernet interface from there - no adaptation-side wiring needed
  beyond having the package installed.
+ .
+ Pulls libpam-google-authenticator + oathtool for SSH TOTP 2FA
+ (key + verification code, no password auth at all — see postinst for the
+ pam.d/sshd_config patches). RFC 6238 TOTP, not tied to Google despite the
+ package name — no network calls, no account, works with any standards-
+ compliant authenticator app.
 
 Package: adaptation-samsung-r7-desktop
 Architecture: arm64
