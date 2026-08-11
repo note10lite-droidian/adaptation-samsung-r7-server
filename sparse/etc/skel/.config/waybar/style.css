@@ -7,3 +7,9 @@ window#waybar {
   background: #000000;
 }
 #clock, #custom-battery, #custom-network, #cpu, #memory { padding: 0 5px; }
+#custom-kbtoggle {
+  font-size: 14px;
+  font-weight: bold;
+  padding: 2px 10px;
+  color: #d0d0d0;
+}

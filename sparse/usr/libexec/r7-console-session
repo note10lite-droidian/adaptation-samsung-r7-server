@@ -1,7 +1,16 @@
 #!/bin/sh
 # r7-server: single client phoc launches via -E. Multiple autostart entries
 # aren't a thing in phoc's config format (unlike wayfire.ini's [autostart]) -
-# this wrapper is the substitute. waybar backgrounded, foot execed last so
-# its exit ends the session (matches phoc's single-client model).
+# this wrapper is the substitute. waybar and phosh-osk-stub backgrounded,
+# foot execed last so its exit ends the session (matches phoc's
+# single-client model).
+#
+# phosh-osk-stub warns it can't register with org.gnome.SessionManager
+# (nothing provides that in this image) - harmless, it still comes up and
+# registers its own sm.puri.OSK0 DBus interface fine. foot (a terminal)
+# doesn't do text-input-v3 field-focus like GTK apps do, so the OSK never
+# auto-shows for it; the waybar K button (r7-osk-toggle) is the deliberate
+# manual replacement for that automatic behaviour.
 waybar &
+phosh-osk-stub --allow-replacement &
 exec foot

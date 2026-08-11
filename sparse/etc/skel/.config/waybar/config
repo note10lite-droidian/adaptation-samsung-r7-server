@@ -3,6 +3,7 @@
   "position": "bottom",
   "margin-left": 12,
   "modules-left": ["group/status"],
+  "modules-right": ["custom/kbtoggle"],
   "group/status": {
     "orientation": "vertical",
     "modules": ["group/line1", "group/line2"]
@@ -26,6 +27,11 @@
     "exec": "/usr/libexec/r7-network-status",
     "interval": 1,
     "format": "{}",
+    "tooltip": false
+  },
+  "custom/kbtoggle": {
+    "format": "K",
+    "on-click": "/usr/libexec/r7-osk-toggle",
     "tooltip": false
   },
   "cpu": { "format": "<span color='#888888'>C:</span><span color='#d0d0d0'>{usage}%</span>", "interval": 1 },

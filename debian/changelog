@@ -1,3 +1,26 @@
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop6+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
+
+  * On-screen keyboard: adaptation-samsung-r7-desktop now Depends on
+    phosh-osk-stub (the same OSK phosh itself uses) instead of building
+    one from scratch - same reuse-what's-proven reasoning as the phoc
+    pivot. It's independently installable (its only rdepends in this
+    repo were droidian-phosh-minimal/phosh/phosh-mobile-settings, all
+    already excluded), and confirmed live it comes up fine under bare
+    phoc despite warning it can't register with org.gnome.SessionManager
+    (nothing provides that here - harmless, it still registers its own
+    sm.puri.OSK0 DBus interface correctly).
+    r7-console-session now backgrounds it alongside waybar. It does NOT
+    auto-show for foot the way it would for a GTK app: phosh-osk-stub
+    shows on text-input-v3 field-focus, and a terminal has no such
+    concept (the whole grid is always the input target) - confirmed live
+    it never popped up on its own. New /usr/libexec/r7-osk-toggle flips
+    it via SetVisible over its own DBus interface instead, wired to a new
+    "K" button in waybar's modules-right (sized up from the status text -
+    14px bold, 2px/10px padding - specifically to be a comfortable tap
+    target, not just readable).
+
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 19:30:00 +0300
+
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop5+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
 
   * Console background to pure black (AMOLED battery: foot's stock
