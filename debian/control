@@ -9,10 +9,31 @@ Standards-Version: 4.5.0.3
 Package: adaptation-samsung-r7
 Architecture: arm64
 Depends: ${misc:Depends},
-         adaptation-hybris-api33-phone,
+         adaptation-hybris-api33,
          adaptation-samsung-r7-configs (= ${binary:Version}),
          openssh-server,
-Description: Community adaptation for samsung-r7 - metapackage
+Conflicts: droidian-phosh-minimal,
+           droidian-minimal,
+Description: Community adaptation for samsung-r7-server - metapackage
+ Server/console fork of adaptation-samsung-r7 (portable-cloud-stack
+ project) — no Phosh, no telephony.
+ .
+ Depends on adaptation-hybris-api33 (standard variant), not
+ adaptation-hybris-api33-phone: the phone variant's own dependency chain
+ (adaptation-hybris-phone -> ofono, ofono-scripts, ofono2mm) is how
+ cellular/telephony gets pulled onto the device at all. Using the standard
+ variant means that chain is never installed in the first place — this is
+ a real dependency-graph exclusion, not a service masked after the fact,
+ so a later `apt upgrade` can't silently bring it back.
+ .
+ Conflicts with droidian-phosh-minimal (and droidian-minimal, which
+ currently just depends back on it in this release channel) for the same
+ reason: apt's solver will refuse to have both installed, so the full
+ Phosh/GNOME desktop stack this metapackage would otherwise pull in
+ (phosh, gnome-control-center, chatty, evolution-data-server,
+ gnome-initial-setup, etc.) never lands in the image, permanently, not as
+ a one-time purge that could regress on a future apt operation.
+ .
  Pulls openssh-server so a first flash always has a working SSH server. The
  base image ships no SSH server at all, which left a fresh install with no
  remote access; SSH over Wi-Fi is the dependable fallback regardless of USB
