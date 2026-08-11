@@ -73,18 +73,18 @@ Depends: ${misc:Depends},
          waybar,
          fuzzel,
          foot,
-         wlr-randr,
-         iio-sensor-proxy,
-Description: Community adaptation for samsung-r7 - desktop-shell (wayfire) mode
- Opt-in landscape desktop session for the r7 built on wayfire over the
- hwcomposer-patched wlroots. NOT enabled by default (phosh stays the shipped
- session); switch live with r7-switch-session. The config files (wayfire.ini,
- waybar, wayfire-test.service, r7-auto-rotate.service, r7-switch-session) ship
- inert in -configs; this metapackage only pulls the runtime stack
- (wayfire/waybar/fuzzel/foot/wlr-randr/iio-sensor-proxy).
+Description: Community adaptation for samsung-r7-server - console session
+ Default (only) desktop-shell session for the r7-server fork, built on
+ wayfire over the hwcomposer-patched wlroots. Used portrait/vertical, no
+ auto-rotate: no iio-sensor-proxy/wlr-randr dependency, unlike the phone
+ image's opt-in wayfire mode this was forked from. wayfire.ini's output
+ transform is a static portrait default now, not a live sensor-driven one
+ (see wayfire.ini's own comment) — r7-auto-rotate.service/-script still
+ ship inert (harmless, Requires=iio-sensor-proxy.service which doesn't
+ exist in this image, so it simply never starts) but are no longer pulled
+ in as a real dependency.
  Notes: the 'decoration' plugin is deliberately omitted (it null-derefs the
- 0.18-backport wlroots xdg lifecycle and crashes on toplevel map). Landscape
- rotation follows the accelerometer via r7-auto-rotate.service (net.hadess.
- SensorProxy -> wlr-randr --transform); no touch calibration matrix is used or
- needed, since wlroots already applies the output transform to absolute input
+ 0.18-backport wlroots xdg lifecycle and crashes on toplevel map); no touch
+ calibration matrix is used or needed, since wlroots already applies the
+ output transform to absolute input
  devices internally (a matrix layered on top double-rotates touch).
