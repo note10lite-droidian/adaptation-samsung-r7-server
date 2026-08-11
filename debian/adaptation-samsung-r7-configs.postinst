@@ -192,6 +192,20 @@ if [ "$1" = "configure" ] && [ -f /etc/ssh/sshd_config ]; then
     fi
 fi
 
+# r7-server: authorize the owner's key for the droidian user (the same
+# account wayfire-test.service runs as, so local console + SSH share one
+# identity). Public key only, safe to keep in source — this is the client
+# key's public half, not a secret, and can authenticate against any number
+# of the owner's own machines the same way.
+if [ "$1" = "configure" ] && [ -d /home/droidian ]; then
+    install -d -m 700 -o droidian -g droidian /home/droidian/.ssh
+    key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGyYgWD+JPF/1V5s8EqNPCZa1Sn0lw9ZMouXlZf+nW6a vkey"
+    touch /home/droidian/.ssh/authorized_keys
+    grep -qxF "${key}" /home/droidian/.ssh/authorized_keys || echo "${key}" >> /home/droidian/.ssh/authorized_keys
+    chmod 600 /home/droidian/.ssh/authorized_keys
+    chown droidian:droidian /home/droidian/.ssh/authorized_keys
+fi
+
 #DEBHELPER#
 
 exit 0
