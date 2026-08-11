@@ -1,0 +1,7 @@
+#!/bin/sh
+# r7-server: single client phoc launches via -E. Multiple autostart entries
+# aren't a thing in phoc's config format (unlike wayfire.ini's [autostart]) -
+# this wrapper is the substitute. waybar backgrounded, foot execed last so
+# its exit ends the session (matches phoc's single-client model).
+waybar &
+exec foot

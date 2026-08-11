@@ -1,0 +1,59 @@
+[Unit]
+Description=phoc console session (r7-server)
+# Seat/VT setup modelled on phosh.service. r7-server: this is the DEFAULT and
+# ONLY session (phosh isn't in this image at all) - enabled at boot, replaces
+# wayfire-test.service (dropped 2026-08-11: wayfire's own xdg-shell/layer-
+# shell surface lifecycle handling is broken on this wlroots 0.18 backport -
+# both kinds of surface are born "uninitialized," so focus routing never
+# reaches any client and touch lands nowhere. phoc doesn't have this bug -
+# it's the exact compositor phosh itself runs on this device every day, with
+# real, working touch - so it hosts foot directly instead).
+Conflicts=phosh.service getty@tty7.service
+After=getty@tty7.service rc-local.service systemd-user-sessions.service
+After=lxc@android.service
+OnFailure=getty@tty1.service
+Before=graphical.target
+ConditionPathExists=/dev/tty0
+# No session fallback by design (user decision): if the console dies, restart
+# it, forever. StartLimitIntervalSec=0 disables systemd's default rate
+# limiter (5 starts / 10s, after which it would give up permanently and
+# leave the device with no session at all).
+StartLimitIntervalSec=0
+
+[Service]
+Environment=LANG=C.UTF-8
+Environment=XDG_CURRENT_DESKTOP=phoc-console
+Environment=XDG_SESSION_DESKTOP=phoc-console
+Environment=XDG_SESSION_TYPE=wayland
+# Same env phosh.service uses to get wlroots on the hwcomposer backend
+# (20-wlroots-hwc-env.conf drop-in) - proven live 2026-08-11.
+Environment=WLR_BACKENDS=hwcomposer,libinput
+Environment=EGL_PLATFORM=hwcomposer
+Environment=WLR_HWC_SKIP_VERSION_CHECK=1
+Environment=WLR_HWC_IDLE_TIME=12
+# Stock phoc.ini (shipped by the phoc package itself, same file phosh uses) -
+# already confirmed live to produce a correct upright portrait console with
+# no changes needed. -E takes exactly one command; r7-console-session is the
+# wrapper that also backgrounds waybar (phoc.ini has no [autostart] section
+# like wayfire.ini did).
+ExecStart=/usr/bin/phoc -C /usr/share/phosh/phoc.ini -E /usr/libexec/r7-console-session
+# Activate the VT so the logind session becomes active on seat0 (phosh does chvt 7).
+ExecStartPost=+chvt 7
+TimeoutStartSec=30
+User=droidian
+PAMName=login
+WorkingDirectory=~
+Restart=always
+RestartSec=2
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=tty7
+UtmpMode=user
+
+[Install]
+WantedBy=graphical.target
