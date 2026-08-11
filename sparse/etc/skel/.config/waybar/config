@@ -1,6 +1,7 @@
 {
   "layer": "top",
   "position": "bottom",
+  "margin-left": 12,
   "modules-left": ["group/status"],
   "group/status": {
     "orientation": "vertical",
@@ -27,6 +28,6 @@
     "format": "{}",
     "tooltip": false
   },
-  "cpu": { "format": " <span color='#888888'>C:</span><span color='#d0d0d0'>{usage}%</span>", "interval": 1 },
+  "cpu": { "format": "<span color='#888888'>C:</span><span color='#d0d0d0'>{usage}%</span>", "interval": 1 },
   "memory": { "format": "<span color='#888888'>M:</span> <span color='#d0d0d0'>{used:0.1f}/{total:0.1f}G</span>", "interval": 1 }
 }

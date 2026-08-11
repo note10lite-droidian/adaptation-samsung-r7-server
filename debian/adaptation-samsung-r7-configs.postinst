@@ -33,19 +33,20 @@ if [ "$1" = "configure" ] && [ -f "$SRC" ]; then
     done
 fi
 
-# r7-server: distribute waybar config the same way, and for the exact same
-# reason as default.pa above (/etc/skel never applies - the user already
-# exists by the time this package unpacks). phoc itself needs no per-user
-# config distribution (unlike wayfire.ini before it) - phoc-console.service
-# passes the stock /usr/share/phosh/phoc.ini directly via -C, already
-# confirmed live to produce a correct upright portrait console unmodified.
+# r7-server: distribute waybar + foot config the same way, and for the
+# exact same reason as default.pa above (/etc/skel never applies - the user
+# already exists by the time this package unpacks). phoc itself needs no
+# per-user config distribution (unlike wayfire.ini before it) -
+# phoc-console.service passes the stock /usr/share/phosh/phoc.ini directly
+# via -C, already confirmed live to produce a correct upright portrait
+# console unmodified.
 if [ "$1" = "configure" ]; then
     for home in /home/*; do
         [ -d "$home" ] || continue
         user="$(basename "$home")"
         id "$user" >/dev/null 2>&1 || continue
 
-        for rel in waybar/config waybar/style.css; do
+        for rel in waybar/config waybar/style.css foot/foot.ini; do
             src="/etc/skel/.config/$rel"
             dest="$home/.config/$rel"
             [ -f "$src" ] || continue
