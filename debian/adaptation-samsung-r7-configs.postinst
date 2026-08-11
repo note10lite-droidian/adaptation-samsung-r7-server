@@ -258,6 +258,26 @@ if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
     systemctl enable r7-disable-android-services.service || true
 fi
 
+# r7-server: ufw.service fails to start outright on this kernel -
+# confirmed live: "Extension rt revision 0 not supported, missing kernel
+# module?" / "ip6tables-restore: line 142 failed" / "Problem running
+# '/etc/ufw/before6.rules'". Root cause: ufw's default before6.rules
+# blocks legacy IPv6 Routing-Header-Type-0 packets via `-m rt --rt-type 0`,
+# needing the ip6t_rt/xt_rt netfilter match module, which this kernel
+# doesn't build. This is a genuine missing-module gap, not device state -
+# a fresh flash on the same kernel hits the identical failure, so it's
+# fixed here rather than left as a one-off live patch. Not pursuing the
+# kernel module for this alone: RH0 processing has been disabled by the
+# kernel's own IPv6 stack by default since ~2009 regardless of firewall
+# rules, so this specific ufw rule is redundant defense-in-depth, not a
+# load-bearing control - dropping it is a reasonable trade against
+# pulling in a kernel change this phase deliberately doesn't touch.
+# before6.rules is a conffile (owned by the ufw package), so it can't be
+# shipped via sparse/ - same sed-patch pattern as sshd_config below.
+if [ "$1" = "configure" ] && [ -f /etc/ufw/before6.rules ]; then
+    sed -i '/-m rt --rt-type 0/s/^-A/#-A/' /etc/ufw/before6.rules
+fi
+
 #DEBHELPER#
 
 exit 0
