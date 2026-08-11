@@ -130,11 +130,12 @@ if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
     systemctl enable phoc-console.service || true
 fi
 
-# r7-server: volume buttons -> backlight brightness. Nothing else consumes
-# gpio_keys' volume events in this headless console (no PulseAudio/
-# gsd-media-keys) - confirmed live they do nothing otherwise.
+# r7-server: volume buttons -> backlight brightness, power button ->
+# display toggle. Nothing else consumes gpio_keys' events in this
+# headless console (no PulseAudio/gsd-media-keys) - confirmed live they
+# do nothing otherwise.
 if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
-    systemctl enable r7-volume-to-brightness.service || true
+    systemctl enable r7-hw-buttons.service || true
 fi
 
 # r7-server: sudoers.d files MUST be mode 0440 or sudo/visudo refuses them

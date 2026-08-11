@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+# r7-server: no PulseAudio/gsd-media-keys volume-key handling, and no
+# power-key/screen-blank handling either, in this headless console -
+# nothing else consumes gpio_keys' events. Volume remaps to backlight
+# brightness; power toggles the panel off/on via phoc's own
+# wlr-output-power-management-v1 support (confirmed live 2026-08-11:
+# decon-0 actually disables/re-enables - a real panel power state
+# change, not just a black frame).
+#
+# Resolves the device by name, not a hardcoded /dev/input/eventN path,
+# since event numbering isn't guaranteed stable across boots (probe
+# order) even though it was event6 on this device when checked live.
+#
+# Runs as root (needed for the backlight sysfs writes); the display
+# toggle needs droidian's Wayland session instead, so that one action
+# shells out via `su droidian` with its runtime env set explicitly.
+import evdev
+import subprocess
+
+BACKLIGHT = "/sys/class/backlight/panel"
+STEP = 30
+OUTPUT = "HWCOMPOSER-1"
+WAYLAND_USER = "droidian"
+WAYLAND_ENV = {"XDG_RUNTIME_DIR": "/run/user/32011", "WAYLAND_DISPLAY": "wayland-0"}
+
+
+def read_int(path):
+    with open(path) as f:
+        return int(f.read().strip())
+
+
+def write_int(path, val):
+    with open(path, "w") as f:
+        f.write(str(val))
+
+
+def find_gpio_keys():
+    for path in evdev.list_devices():
+        dev = evdev.InputDevice(path)
+        if dev.name == "gpio_keys":
+            return dev
+    raise RuntimeError("gpio_keys input device not found")
+
+
+def toggle_display():
+    env_args = [f"{k}={v}" for k, v in WAYLAND_ENV.items()]
+    subprocess.run(
+        ["su", "-", WAYLAND_USER, "-c",
+         "env " + " ".join(env_args) + f" wlopm --toggle {OUTPUT}"],
+        timeout=5,
+    )
+
+
+def main():
+    max_b = read_int(f"{BACKLIGHT}/max_brightness")
+    dev = find_gpio_keys()
+    for event in dev.read_loop():
+        if event.type != evdev.ecodes.EV_KEY or event.value != 1:
+            continue
+        if event.code == evdev.ecodes.KEY_VOLUMEUP:
+            cur = read_int(f"{BACKLIGHT}/brightness")
+            write_int(f"{BACKLIGHT}/brightness", min(max_b, cur + STEP))
+        elif event.code == evdev.ecodes.KEY_VOLUMEDOWN:
+            cur = read_int(f"{BACKLIGHT}/brightness")
+            write_int(f"{BACKLIGHT}/brightness", max(0, cur - STEP))
+        elif event.code == evdev.ecodes.KEY_POWER:
+            toggle_display()
+
+
+if __name__ == "__main__":
+    main()

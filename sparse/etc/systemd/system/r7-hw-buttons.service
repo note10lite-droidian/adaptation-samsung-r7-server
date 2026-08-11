@@ -1,12 +1,13 @@
 [Unit]
-Description=Remap volume buttons to backlight brightness (r7-server)
+Description=Volume -> brightness, power -> display toggle (r7-server)
 # No PulseAudio/gsd-media-keys in this headless console to consume the
-# volume keys otherwise - confirmed live they do nothing without this.
+# volume/power keys otherwise - confirmed live they do nothing without
+# this.
 After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/usr/libexec/r7-volume-to-brightness
+ExecStart=/usr/libexec/r7-hw-buttons
 Restart=always
 RestartSec=2
 
