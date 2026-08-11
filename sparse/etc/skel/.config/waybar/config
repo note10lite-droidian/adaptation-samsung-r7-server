@@ -1,44 +1,32 @@
 {
   "layer": "top",
-  "position": "top",
-  "height": 46,
-  "spacing": 6,
-  "modules-left": ["custom/launcher", "wlr/taskbar"],
-  "modules-center": ["clock"],
-  "modules-right": ["pulseaudio", "network", "battery", "tray"],
-  "custom/launcher": {
-    "format": "  ",
-    "on-click": "fuzzel",
+  "position": "bottom",
+  "modules-left": ["group/status"],
+  "group/status": {
+    "orientation": "vertical",
+    "modules": ["group/line1", "group/line2"]
+  },
+  "group/line1": {
+    "orientation": "horizontal",
+    "modules": ["clock", "custom/battery", "custom/network"]
+  },
+  "group/line2": {
+    "orientation": "horizontal",
+    "modules": ["cpu", "memory"]
+  },
+  "clock": { "format": "<span color='#d0d0d0'>{:%H:%M}</span>" },
+  "custom/battery": {
+    "exec": "/usr/libexec/r7-battery-status",
+    "interval": 1,
+    "format": "{}",
     "tooltip": false
   },
-  "wlr/taskbar": {
-    "format": "{icon}",
-    "icon-size": 26,
-    "tooltip-format": "{title}",
-    "on-click": "activate",
-    "on-click-middle": "close",
-    "on-click-right": "close"
+  "custom/network": {
+    "exec": "/usr/libexec/r7-network-status",
+    "interval": 1,
+    "format": "{}",
+    "tooltip": false
   },
-  "clock": {
-    "format": "{:%H:%M}",
-    "tooltip-format": "{:%Y-%m-%d %A}"
-  },
-  "battery": {
-    "format": "{capacity}% {icon}",
-    "format-charging": "{capacity}% ",
-    "format-icons": ["", "", "", "", ""]
-  },
-  "network": {
-    "format-wifi": " {signalStrength}%",
-    "format-ethernet": "",
-    "format-disconnected": "⚠",
-    "on-click": "foot -e nmtui"
-  },
-  "pulseaudio": {
-    "format": "{volume}% {icon}",
-    "format-muted": "",
-    "format-icons": { "default": ["", "", ""] },
-    "on-click": "pavucontrol || foot -e alsamixer"
-  },
-  "tray": { "spacing": 10, "icon-size": 22 }
+  "cpu": { "format": "<span color='#888888'>C:</span><span color='#d0d0d0'>{usage}%</span>", "interval": 1 },
+  "memory": { "format": "<span color='#888888'>M:</span> <span color='#d0d0d0'>{used:0.1f}/{total:0.1f}G</span>", "interval": 1 }
 }

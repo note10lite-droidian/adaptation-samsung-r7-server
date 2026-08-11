@@ -33,24 +33,19 @@ if [ "$1" = "configure" ] && [ -f "$SRC" ]; then
     done
 fi
 
-# r7-server: distribute wayfire.ini + waybar config the same way, and for the
-# exact same reason as default.pa above (/etc/skel never applies - the user
-# already exists by the time this package unpacks).
-#
-# On the phone image this gap was invisible: wayfire was opt-in, and the
-# service was ALSO passing a wrong config path (%h -> /root, fixed in
-# wayfire-test.service), so nothing ever read these files anyway. Here wayfire
-# is the only session, so a missing config means booting into wayfire's
-# built-in defaults - which include the `decoration` plugin that segfaults
-# this wlroots on the first window, and omit `plamo` (no tap/click on
-# layer-shell surfaces), the HiDPI scale, and the portrait transform.
+# r7-server: distribute waybar config the same way, and for the exact same
+# reason as default.pa above (/etc/skel never applies - the user already
+# exists by the time this package unpacks). phoc itself needs no per-user
+# config distribution (unlike wayfire.ini before it) - phoc-console.service
+# passes the stock /usr/share/phosh/phoc.ini directly via -C, already
+# confirmed live to produce a correct upright portrait console unmodified.
 if [ "$1" = "configure" ]; then
     for home in /home/*; do
         [ -d "$home" ] || continue
         user="$(basename "$home")"
         id "$user" >/dev/null 2>&1 || continue
 
-        for rel in wayfire.ini waybar/config waybar/style.css; do
+        for rel in waybar/config waybar/style.css; do
             src="/etc/skel/.config/$rel"
             dest="$home/.config/$rel"
             [ -f "$src" ] || continue
@@ -124,15 +119,14 @@ if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
     systemctl --global disable r7-setup-lock.service 2>/dev/null || true
 fi
 
-# r7-server: wayfire becomes the default (only) session, not an opt-in
+# r7-server: phoc-console becomes the default (only) session, not an opt-in
 # alternative to phosh — phosh is gone entirely from this image (Conflicts
-# in debian/control). wayfire-test.service already models its seat/VT setup
-# on phosh.service (see adaptation-samsung-r7-desktop's Depends + the
-# hwcomposer-viable notes in the unit file) and previously required a live
-# r7-switch-session invocation to start; enable it directly so it's what
-# comes up on tty7 at boot, same role phosh.service used to have.
+# in debian/control). phoc-console.service models its seat/VT setup on
+# phosh.service (see adaptation-samsung-r7-desktop's Depends + the unit
+# file's own notes on why phoc replaced wayfire here); enable it directly so
+# it's what comes up on tty7 at boot, same role phosh.service used to have.
 if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
-    systemctl enable wayfire-test.service || true
+    systemctl enable phoc-console.service || true
 fi
 
 # r7: repoint /etc/resolv.conf at NetworkManager's resolv.conf.
@@ -224,7 +218,7 @@ if [ "$1" = "configure" ] && [ -f /etc/ssh/sshd_config ]; then
 fi
 
 # r7-server: authorize the owner's key for the droidian user (the same
-# account wayfire-test.service runs as, so local console + SSH share one
+# account phoc-console.service runs as, so local console + SSH share one
 # identity). Public key only, safe to keep in source — this is the client
 # key's public half, not a secret, and can authenticate against any number
 # of the owner's own machines the same way.

@@ -1,0 +1,16 @@
+#!/bin/sh
+# r7-server: waybar's native battery module computes percentage from
+# charge_now/charge_full, which this device's Samsung fuel-gauge driver
+# reports as a broken near-zero stub (charge_now=2 against charge_full=
+# 4300000) - always rounds to 0%. The `capacity` attribute itself is
+# correct and matches the real state of charge, so read it directly.
+BAT=/sys/class/power_supply/battery
+capacity="$(cat "$BAT/capacity" 2>/dev/null || echo 0)"
+# status alone isn't enough: once full, the driver reports "Full" instead
+# of "Charging" even with the charger still plugged in - check ac/usb
+# online too so "(C)" means "charger plugged in", not "still gaining charge".
+ac_online="$(cat /sys/class/power_supply/ac/online 2>/dev/null || echo 0)"
+usb_online="$(cat /sys/class/power_supply/usb/online 2>/dev/null || echo 0)"
+chg=""
+[ "$ac_online" = "1" ] || [ "$usb_online" = "1" ] && chg="(C)"
+printf '<span color="#888888">P%s:</span><span color="#d0d0d0">%s%%</span>' "$chg" "$capacity"

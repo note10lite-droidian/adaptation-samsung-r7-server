@@ -1,0 +1,34 @@
+#!/bin/sh
+# r7-server: waybar's native network module's {bandwidthUpBytes}/
+# {bandwidthDownBytes} never updated on this build (confirmed live
+# 2026-08-11: sustained 50MB+ downloads, swlan0's own rx_bytes counter
+# moved correctly, but waybar's computed value stayed 0 - no netlink
+# activity for it in a full trace log either). Read the sysfs counters
+# directly and compute B/s from the delta since the last poll, persisted
+# in a state file since each invocation is a fresh process.
+IFACE=swlan0
+STATE="${XDG_RUNTIME_DIR:-/tmp}/r7-netstate"
+
+now="$(date +%s.%N)"
+rx="$(cat /sys/class/net/$IFACE/statistics/rx_bytes 2>/dev/null || echo 0)"
+tx="$(cat /sys/class/net/$IFACE/statistics/tx_bytes 2>/dev/null || echo 0)"
+
+down=0
+up=0
+if [ -f "$STATE" ]; then
+    read -r prev_time prev_rx prev_tx < "$STATE"
+    down="$(awk -v r="$rx" -v pr="$prev_rx" -v t1="$now" -v t0="$prev_time" \
+        'BEGIN{dt=t1-t0; if(dt<=0)dt=1; d=r-pr; if(d<0)d=0; printf "%.0f", d/dt}')"
+    up="$(awk -v r="$tx" -v pr="$prev_tx" -v t1="$now" -v t0="$prev_time" \
+        'BEGIN{dt=t1-t0; if(dt<=0)dt=1; d=r-pr; if(d<0)d=0; printf "%.0f", d/dt}')"
+fi
+echo "$now $rx $tx" > "$STATE"
+
+sig="$(nmcli -t -f active,signal dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}')"
+[ -z "$sig" ] && sig=0
+
+bt="$(bluetoothctl devices Connected 2>/dev/null | head -1 | cut -d' ' -f3-)"
+
+out="<span color=\"#888888\">N:</span><span color=\"#d0d0d0\">${sig}%</span> <span color=\"#888888\">U:</span><span color=\"#d0d0d0\">${up}B/s</span> <span color=\"#888888\">D:</span><span color=\"#d0d0d0\">${down}B/s</span>"
+[ -n "$bt" ] && out="${out}  <span color=\"#888888\">BT:</span><span color=\"#d0d0d0\">${bt}</span>"
+printf '%s' "$out"

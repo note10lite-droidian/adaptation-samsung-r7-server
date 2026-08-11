@@ -1,3 +1,72 @@
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop4+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
+
+  * Redesign the console waybar into a compact 2-line status block
+    (bottom-left, 9px monospace): line 1 is clock + battery + network/
+    bluetooth, line 2 is cpu + memory. Dropped the launcher/taskbar/tray
+    modules and fuzzel dependency - phoc has no window manager, so a
+    second client from the launcher has nowhere sane to go, and taskbar
+    has nothing meaningful to list with one client running.
+    Two real data bugs found and fixed live, both via direct
+    /sys-vs-waybar-output comparison, neither guessed:
+    - Battery always read 0%: waybar's native battery module computes
+      percentage from charge_now/charge_full, and this device's Samsung
+      fuel-gauge driver reports charge_now as a broken near-zero stub
+      (2 against a charge_full of 4300000) - always rounds to 0. The
+      `capacity` sysfs attribute itself is correct. New
+      /usr/libexec/r7-battery-status reads it directly; also treats
+      ac/usb `online` as the charging indicator, not battery `status`
+      alone, since a full battery reports "Full" (not "Charging") even
+      with the charger still connected.
+    - Network up/down always read 0 B/s: waybar's native
+      {bandwidthUpBytes}/{bandwidthDownBytes} never updated even under a
+      sustained 80MB+ download, confirmed live by diffing
+      /sys/class/net/swlan0/statistics/rx_bytes directly against
+      waybar's displayed value while downloading - the interface counter
+      moved correctly (matching curl's own reported throughput almost
+      exactly), waybar's computed value didn't, and a full trace log
+      showed no netlink activity for it at all. New
+      /usr/libexec/r7-network-status reads the sysfs counters directly
+      and computes B/s from the delta since the last poll (state
+      persisted in $XDG_RUNTIME_DIR between invocations). Also found:
+      the real default-route interface on this device is `swlan0`, not
+      `wlan0` - confirmed via `ip route get`.
+    Multi-line rendering itself needed a real workaround too: a single
+    custom module's multi-line stdout (embedded \n) silently truncates
+    to its first line on this waybar build (v0.12.0), confirmed with an
+    isolated static-text test before assuming it was a script bug.
+    Switched to waybar's native `group` module (orientation: vertical)
+    wrapping per-line horizontal groups of real modules instead - stacks
+    correctly, and was also the fix for an earlier failed attempt at
+    three separate margin-offset bar surfaces from one process, which
+    phoc could not position reliably (bars never lined up - not
+    reproduced further since the group-based approach needs only one
+    surface).
+
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 19:00:00 +0300
+
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop3+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
+
+  * Replace wayfire with bare phoc as the r7-server console compositor
+    (adaptation-samsung-r7-desktop: Depends on phoc, not wayfire). Live
+    testing found an unfixed wayfire bug: on this wlroots 0.18 backport,
+    both xdg-shell and layer-shell surfaces are born "uninitialized," so
+    focus routing never reaches any client and touch lands nowhere -
+    confirmed with correlated evdev capture + wayfire log timing, ruled
+    out package version drift. phoc doesn't have this bug (it's the exact
+    compositor phosh runs on this device every day, with real working
+    touch) and needs no window-manager/decoration-plugin workarounds
+    wayfire did. New phoc-console.service (replaces wayfire-test.service)
+    passes phoc the stock /usr/share/phosh/phoc.ini unmodified - confirmed
+    live to render a correct upright portrait console with no changes
+    needed. New /usr/libexec/r7-console-session wraps foot + backgrounded
+    waybar, since -E takes exactly one command and phoc.ini has no
+    wayfire.ini-style [autostart] section. Dropped wayfire.ini (no longer
+    needed) and r7-switch-session (existed only to toggle phosh<->wayfire,
+    both gone from this fork - phosh via Conflicts, wayfire-test.service
+    deleted with this change).
+
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 18:30:00 +0300
+
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop2+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
 
   * Populate community-samsung-r7.list with this port's own apt overlay
