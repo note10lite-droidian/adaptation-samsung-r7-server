@@ -1,37 +1,12 @@
 #!/bin/sh
 set -e
 
-# r7: distribute the PulseAudio configuration to existing users.
-#
-# WHY THIS IS NEEDED: PA only reads ~/.config/pulse/default.pa and
-# /etc/pulse/default.pa. The latter is diverted by pulseaudio-config-droid, so
-# we cannot claim it. /etc/skel does not help either: during rootfs generation
-# the user is created (device.yaml -> droidian_phosh.yaml -> gsi_base ->
-# setup-user.sh) BEFORE this package is unpacked (device.yaml lines 16-18 vs
-# 28-30), so skel is never applied.
-#
-# The system-wide /etc/pulse/arm_droid_card_custom.pa include point is not
-# usable either: the stock default.pa loads module-droid-hidl AFTER that
-# include, and that module expects module_id=primary, so it fails with
-# "Couldn't get hw module functions" and takes PA down on a dbus assertion.
-
-SRC=/etc/skel/.config/pulse/default.pa
-
-if [ "$1" = "configure" ] && [ -f "$SRC" ]; then
-    for home in /home/*; do
-        [ -d "$home" ] || continue
-        user="$(basename "$home")"
-        id "$user" >/dev/null 2>&1 || continue
-
-        dest="$home/.config/pulse/default.pa"
-        # If the user created their own file, LEAVE IT ALONE
-        if [ ! -e "$dest" ]; then
-            mkdir -p "$home/.config/pulse"
-            cp "$SRC" "$dest"
-            chown -R "$user":"$(id -gn "$user")" "$home/.config/pulse"
-        fi
-    done
-fi
+# r7-server: the PulseAudio configuration distribution that used to live here
+# is GONE, along with /etc/pulse/droid/*, android-audio-hal.service and the
+# r7-volume-save/-restore user services. Audio and the microphone are stripped
+# from this fork at the KERNEL level (the whole ASoC stack: ABOX DSP, RT5665
+# codec, TAS2562 amp, USB audio, and the SND_SOC_SAMSUNG_VTS always-on voice
+# trigger), so there is no sound card for any of it to configure.
 
 # r7-server: distribute waybar + foot config the same way, and for the
 # exact same reason as default.pa above (/etc/skel never applies - the user
@@ -88,19 +63,6 @@ if [ "$1" = "configure" ]; then
     if command -v systemctl >/dev/null 2>&1; then
         systemctl --global enable r7-spen-mode.service || true
     fi
-fi
-
-# r7: audio sink volume persistence. Stock PulseAudio's module-stream-restore
-# only subscribes to PA_SUBSCRIPTION_MASK_SINK_INPUT|SOURCE_OUTPUT (checked
-# against the actual v14.2 source) - it never tracks a sink's own device
-# volume, only per-application stream volumes, so the volume phosh's slider
-# sets falls back to the droid-sink's Base Volume (100%) on every PulseAudio
-# restart/reboot. r7-volume-save watches `pactl subscribe` and persists sink
-# volume changes; r7-volume-restore applies the saved value (or a 70% default)
-# at PulseAudio startup. Proven live 2026-08-08 across two full
-# change/restart/verify cycles (GUNLUK G1.36).
-if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
-    systemctl --global enable r7-volume-save.service r7-volume-restore.service || true
 fi
 
 # r7-server: first-boot setup lock (OOBE) — DISABLED, not enabled.
