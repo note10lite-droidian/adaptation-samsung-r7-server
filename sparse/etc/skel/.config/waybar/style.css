@@ -10,6 +10,10 @@ window#waybar {
 #custom-kbtoggle {
   font-size: 14px;
   font-weight: bold;
-  padding: 2px 10px;
+  /* Extra padding on the right specifically: this is the last module on the
+     bar, so it sits nearest the panel's curved corner. The bar's own
+     margin-right handles most of it; this keeps the glyph itself off the
+     curve. */
+  padding: 2px 18px 2px 10px;
   color: #d0d0d0;
 }

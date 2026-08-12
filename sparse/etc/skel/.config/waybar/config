@@ -1,7 +1,14 @@
 {
   "layer": "top",
   "position": "bottom",
+  // margin-left/right, not CSS padding on window#waybar: GTK padding does
+  // NOT shift a wlr-layer-shell surface at all (confirmed live - the bar
+  // stayed flush against the edge). These are waybar's own native keys and
+  // they do work. Both sides are inset so the bar - and especially the
+  // rightmost K (on-screen-keyboard) button - clears this panel's rounded
+  // corners, which otherwise cut the button off and made it untappable.
   "margin-left": 12,
+  "margin-right": 12,
   "modules-left": ["group/status"],
   "modules-right": ["custom/kbtoggle"],
   "group/status": {
