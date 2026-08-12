@@ -1,5 +1,21 @@
-adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop10+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1+r7harden1) bookworm; urgency=medium
+adaptation-samsung-r7 (1.0.0) bookworm; urgency=medium
 
+  * Version reset to 1.0.0 for this fork specifically
+    (adaptation-samsung-r7-server). The inherited "+r7featureN forever"
+    suffix chain from the original adaptation-samsung-r7 package hit a
+    hard filesystem limit: releng-build-package always appends its own
+    ~36-char "+git<timestamp>.<hash>.bookworm" traceability suffix on
+    top of whatever's in debian/changelog's top entry (confirmed by
+    reading releng-build-changelog's actual source inside the build
+    container - it falls back to debian/changelog's committed top
+    version since this repo has never used real git tags), and the
+    accumulated chain plus that suffix exceeded 255 bytes, making
+    dpkg-deb's own build fail outright ("File name too long"). Dropping
+    the old prefix here doesn't touch dpkg's version ordering for this
+    package's own upgrade path - only entries strictly below this one in
+    the same file need to compare lower, which they still do regardless
+    of their own (unshortened) version strings. All prior history stays
+    intact below, unedited.
   * Unattended-device resilience, two independent pieces:
     - Fixed ufw.service failing to start outright on this kernel -
       confirmed live: "Extension rt revision 0 not supported, missing
@@ -38,157 +54,33 @@ adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git2026072809203
 
  -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 21:32:00 +0300
 
-adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop10+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
+adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop3+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
 
-  * Two idle timeouts, both confirmed live with short test values before
-    landing on their real ones:
-    - Console session idle-logout (60s). r7-console-login no longer
-      `exec`s `su -` - it calls it normally so the wrapper is still alive
-      when the shell exits (idle timeout or a normal `exit`), and loops
-      back to the login prompt instead of tearing down the whole
-      phoc/waybar/OSK session. New /etc/profile.d/r7-console-idle-timeout.sh
-      sets bash's native TMOUT=60, scoped to the console only (skipped
-      when $SSH_CONNECTION is set, so SSH sessions are unaffected - an
-      idle SSH session is a different, already-covered threat model).
-      An on-bar countdown display was tried and then deliberately
-      dropped by request - the underlying timeout stayed.
-    - Display auto-off after 120s of no touch/button activity
-      (r7-hw-buttons, extended to also watch the touchscreen device via
-      select() alongside gpio_keys). Touch only resets the timer while
-      the display is already on - it deliberately does NOT wake the
-      display back up, matching normal phone behaviour where only the
-      power button wakes a screen-off device. Brightness needs no extra
-      "memory" handling for this: confirmed live it's untouched by a
-      decon power-mode cycle, and systemd-backlight@backlight:panel
-      already persists it across reboots.
-
- -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 21:26:00 +0300
-
-adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop9+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
-
-  * Power button now toggles the display off/on (r7-volume-to-brightness
-    renamed to r7-hw-buttons, since it now handles KEY_POWER too). Uses
-    phoc's own wlr-output-power-management-v1 support via the new wlopm
-    dependency - confirmed live via dmesg that decon-0 actually
-    disables/re-enables - a real panel power-state change, not just a
-    black frame. The daemon still runs as root (needed for the
-    backlight writes) but shells out to `su droidian` with the Wayland
-    runtime env set explicitly for the one action that needs droidian's
-    session.
-
- -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 21:05:00 +0300
-
-adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop8+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
-
-  * Console now gated behind a real credential check instead of handing
-    over an already-authenticated shell on boot - physical access to the
-    device no longer bypasses authentication the way SSH already
-    requires it (key + TOTP). New /usr/libexec/r7-console-login prompts
-    for any local username (not hardcoded to droidian) with masked
-    password entry, verifies via pamtester (PAM authenticate only), and
-    on success hands off via `su -`.
-    Deliberately NOT /bin/login: tried it first
-    (foot -e login, phoc still running as droidian) and it crashed the
-    entire compositor session within seconds, confirmed live via
-    journalctl showing a repeating Start/SIGKILL loop - login expects to
-    own/manage a real tty (vhangup, session leader, etc.) and doesn't
-    tolerate being nested inside a Wayland pty. su, run by root, neither
-    re-prompts nor does any of that tty ownership, and was confirmed
-    live to bring up a stable session.
-    Switching users needs root (setuid), which the droidian-owned
-    session doesn't have - added a narrowly-scoped sudoers.d rule
-    (droidian NOPASSWD for this exact script only, not general sudo) so
-    foot's child process can hand off to root just long enough to check
-    the password and su. New pamtester dependency.
-    One real packaging gotcha hit and fixed: sudoers.d files must be
-    mode 0440 or sudo refuses them outright ("bad permissions") -
-    confirmed live with visudo -c. git only tracks the executable bit
-    (644/755 - two states), not exact modes, so sparse/ alone can't
-    carry 0440 through a fresh checkout; postinst chmods it explicitly
-    instead, same pattern as authorized_keys.
-
- -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 20:35:00 +0300
-
-adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop7+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
-
-  * Volume buttons remapped to backlight brightness (new
-    r7-volume-to-brightness.service, python3-evdev added to
-    adaptation-samsung-r7-desktop's Depends). Nothing in this headless
-    console consumes gpio_keys' volume events otherwise - no PulseAudio
-    volume UI, no gsd-media-keys - confirmed live they're a dead no-op
-    without this, so remapping doesn't fight anything for the keys.
-    Resolves the physical device by name ("gpio_keys"), not a hardcoded
-    /dev/input/eventN path, since event numbering isn't guaranteed
-    stable across boots (probe order) even though it was event6 on this
-    device when checked live.
-  * foot's console font down to size=7 (from foot's default size=8) for
-    more visible text on a small panel. Landed on 7, not smaller: a
-    size=6 test correlated with phosh-osk-stub's terminal shortcuts row
-    (arrows/PgUp/PgDn) no longer getting drawn after a session restart -
-    not conclusively proven causal (could have been restart-timing
-    instead), but 7 was confirmed live to keep the row working, so
-    staying there rather than re-risking it.
-  * Known limitation, not fixed (phosh-osk-stub bug, not ours to patch
-    from this recipe): the terminal shortcuts row's data model builds
-    correctly every time (confirmed via debug log - all configured
-    shortcuts get added, "Layout: terminal" detected correctly from
-    foot's own text-input-v3 purpose hint), but the OSK's layer-shell
-    surface height stays locked at the same value both before and after
-    terminal-mode detection - the row never gets any allocated screen
-    space, so it doesn't render at all rather than rendering compressed.
-    Plain letter input is unaffected.
-
- -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 20:15:00 +0300
-
-adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop6+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
-
-  * On-screen keyboard: adaptation-samsung-r7-desktop now Depends on
-    phosh-osk-stub (the same OSK phosh itself uses) instead of building
-    one from scratch - same reuse-what's-proven reasoning as the phoc
-    pivot. It's independently installable (its only rdepends in this
-    repo were droidian-phosh-minimal/phosh/phosh-mobile-settings, all
-    already excluded), and confirmed live it comes up fine under bare
-    phoc despite warning it can't register with org.gnome.SessionManager
-    (nothing provides that here - harmless, it still registers its own
-    sm.puri.OSK0 DBus interface correctly).
-    r7-console-session now backgrounds it alongside waybar. It does NOT
-    auto-show for foot the way it would for a GTK app: phosh-osk-stub
-    shows on text-input-v3 field-focus, and a terminal has no such
-    concept (the whole grid is always the input target) - confirmed live
-    it never popped up on its own. New /usr/libexec/r7-osk-toggle flips
-    it via SetVisible over its own DBus interface instead, wired to a new
-    "K" button in waybar's modules-right (sized up from the status text -
-    14px bold, 2px/10px padding - specifically to be a comfortable tap
-    target, not just readable).
-
- -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 19:30:00 +0300
-
-adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop5+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
-
-  * Console background to pure black (AMOLED battery: foot's stock
-    242424 and waybar's rgba(20,22,28,0.85) both light every sub-pixel
-    dimly across the whole screen instead of leaving it truly off). New
-    /etc/skel/.config/foot/foot.ini (background=000000, pad=12x4);
-    waybar's window#waybar background to #000000.
-  * Pad both foot and waybar past the panel's curved corners. foot via
-    its own pad= (symmetric, no per-edge control available). waybar via
-    its native margin-left config key, not CSS padding on window#waybar
-    - confirmed live that GTK padding on the layer-shell window node
-    doesn't shift the surface at all (bar stayed flush against the edge
-    despite the CSS rule), while margin-left visibly shrank the surface's
-    own width by exactly the margin amount, proving it reaches the
-    wlr-layer-shell protocol correctly.
-  * Fixed a CSS selector left stale from the custom/battery and
-    custom/network migration: the per-module spacing rule still targeted
-    #battery/#network (the old native module class names), which no
-    longer exist under those IDs - #custom-battery/#custom-network is
-    the real GTK node name for a `custom/` module, so the rule silently
-    matched nothing and the two labels ran together with zero spacing.
-
- -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 19:20:00 +0300
-
-adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop4+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
-
+  * NOTE: this entry consolidates what were originally 8 separate
+    +r7desktop3 through +r7desktop10 version bumps from one continuous
+    session's work into a single version - none of the intermediate
+    states were ever built or shipped separately, and the accumulated
+    version-suffix chain across all of them grew long enough that
+    dpkg-deb's build started failing outright ("File name too long").
+    All the content below is unedited from those original entries.
+  * Replace wayfire with bare phoc as the r7-server console compositor
+    (adaptation-samsung-r7-desktop: Depends on phoc, not wayfire). Live
+    testing found an unfixed wayfire bug: on this wlroots 0.18 backport,
+    both xdg-shell and layer-shell surfaces are born "uninitialized," so
+    focus routing never reaches any client and touch lands nowhere -
+    confirmed with correlated evdev capture + wayfire log timing, ruled
+    out package version drift. phoc doesn't have this bug (it's the exact
+    compositor phosh runs on this device every day, with real working
+    touch) and needs no window-manager/decoration-plugin workarounds
+    wayfire did. New phoc-console.service (replaces wayfire-test.service)
+    passes phoc the stock /usr/share/phosh/phoc.ini unmodified - confirmed
+    live to render a correct upright portrait console with no changes
+    needed. New /usr/libexec/r7-console-session wraps foot + backgrounded
+    waybar, since -E takes exactly one command and phoc.ini has no
+    wayfire.ini-style [autostart] section. Dropped wayfire.ini (no longer
+    needed) and r7-switch-session (existed only to toggle phosh<->wayfire,
+    both gone from this fork - phosh via Conflicts, wayfire-test.service
+    deleted with this change).
   * Redesign the console waybar into a compact 2-line status block
     (bottom-left, 9px monospace): line 1 is clock + battery + network/
     bluetooth, line 2 is cpu + memory. Dropped the launcher/taskbar/tray
@@ -230,31 +122,127 @@ adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git2026072809203
     phoc could not position reliably (bars never lined up - not
     reproduced further since the group-based approach needs only one
     surface).
+  * Console background to pure black (AMOLED battery: foot's stock
+    242424 and waybar's rgba(20,22,28,0.85) both light every sub-pixel
+    dimly across the whole screen instead of leaving it truly off). New
+    /etc/skel/.config/foot/foot.ini (background=000000, pad=12x4);
+    waybar's window#waybar background to #000000.
+  * Pad both foot and waybar past the panel's curved corners. foot via
+    its own pad= (symmetric, no per-edge control available). waybar via
+    its native margin-left config key, not CSS padding on window#waybar
+    - confirmed live that GTK padding on the layer-shell window node
+    doesn't shift the surface at all (bar stayed flush against the edge
+    despite the CSS rule), while margin-left visibly shrank the surface's
+    own width by exactly the margin amount, proving it reaches the
+    wlr-layer-shell protocol correctly.
+  * Fixed a CSS selector left stale from the custom/battery and
+    custom/network migration: the per-module spacing rule still targeted
+    #battery/#network (the old native module class names), which no
+    longer exist under those IDs - #custom-battery/#custom-network is
+    the real GTK node name for a `custom/` module, so the rule silently
+    matched nothing and the two labels ran together with zero spacing.
+  * On-screen keyboard: adaptation-samsung-r7-desktop now Depends on
+    phosh-osk-stub (the same OSK phosh itself uses) instead of building
+    one from scratch - same reuse-what's-proven reasoning as the phoc
+    pivot. It's independently installable (its only rdepends in this
+    repo were droidian-phosh-minimal/phosh/phosh-mobile-settings, all
+    already excluded), and confirmed live it comes up fine under bare
+    phoc despite warning it can't register with org.gnome.SessionManager
+    (nothing provides that here - harmless, it still registers its own
+    sm.puri.OSK0 DBus interface correctly).
+    r7-console-session now backgrounds it alongside waybar. It does NOT
+    auto-show for foot the way it would for a GTK app: phosh-osk-stub
+    shows on text-input-v3 field-focus, and a terminal has no such
+    concept (the whole grid is always the input target) - confirmed live
+    it never popped up on its own. New /usr/libexec/r7-osk-toggle flips
+    it via SetVisible over its own DBus interface instead, wired to a new
+    "K" button in waybar's modules-right (sized up from the status text -
+    14px bold, 2px/10px padding - specifically to be a comfortable tap
+    target, not just readable).
+  * Volume buttons remapped to backlight brightness (new
+    r7-volume-to-brightness.service, python3-evdev added to
+    adaptation-samsung-r7-desktop's Depends). Nothing in this headless
+    console consumes gpio_keys' volume events otherwise - no PulseAudio
+    volume UI, no gsd-media-keys - confirmed live they're a dead no-op
+    without this, so remapping doesn't fight anything for the keys.
+    Resolves the physical device by name ("gpio_keys"), not a hardcoded
+    /dev/input/eventN path, since event numbering isn't guaranteed
+    stable across boots (probe order) even though it was event6 on this
+    device when checked live.
+  * foot's console font down to size=7 (from foot's default size=8) for
+    more visible text on a small panel. Landed on 7, not smaller: a
+    size=6 test correlated with phosh-osk-stub's terminal shortcuts row
+    (arrows/PgUp/PgDn) no longer getting drawn after a session restart -
+    not conclusively proven causal (could have been restart-timing
+    instead), but 7 was confirmed live to keep the row working, so
+    staying there rather than re-risking it.
+  * Known limitation, not fixed (phosh-osk-stub bug, not ours to patch
+    from this recipe): the terminal shortcuts row's data model builds
+    correctly every time (confirmed via debug log - all configured
+    shortcuts get added, "Layout: terminal" detected correctly from
+    foot's own text-input-v3 purpose hint), but the OSK's layer-shell
+    surface height stays locked at the same value both before and after
+    terminal-mode detection - the row never gets any allocated screen
+    space, so it doesn't render at all rather than rendering compressed.
+    Plain letter input is unaffected.
+  * Console now gated behind a real credential check instead of handing
+    over an already-authenticated shell on boot - physical access to the
+    device no longer bypasses authentication the way SSH already
+    requires it (key + TOTP). New /usr/libexec/r7-console-login prompts
+    for any local username (not hardcoded to droidian) with masked
+    password entry, verifies via pamtester (PAM authenticate only), and
+    on success hands off via `su -`.
+    Deliberately NOT /bin/login: tried it first
+    (foot -e login, phoc still running as droidian) and it crashed the
+    entire compositor session within seconds, confirmed live via
+    journalctl showing a repeating Start/SIGKILL loop - login expects to
+    own/manage a real tty (vhangup, session leader, etc.) and doesn't
+    tolerate being nested inside a Wayland pty. su, run by root, neither
+    re-prompts nor does any of that tty ownership, and was confirmed
+    live to bring up a stable session.
+    Switching users needs root (setuid), which the droidian-owned
+    session doesn't have - added a narrowly-scoped sudoers.d rule
+    (droidian NOPASSWD for this exact script only, not general sudo) so
+    foot's child process can hand off to root just long enough to check
+    the password and su. New pamtester dependency.
+    One real packaging gotcha hit and fixed: sudoers.d files must be
+    mode 0440 or sudo refuses them outright ("bad permissions") -
+    confirmed live with visudo -c. git only tracks the executable bit
+    (644/755 - two states), not exact modes, so sparse/ alone can't
+    carry 0440 through a fresh checkout; postinst chmods it explicitly
+    instead, same pattern as authorized_keys.
+  * Power button now toggles the display off/on (r7-volume-to-brightness
+    renamed to r7-hw-buttons, since it now handles KEY_POWER too). Uses
+    phoc's own wlr-output-power-management-v1 support via the new wlopm
+    dependency - confirmed live via dmesg that decon-0 actually
+    disables/re-enables - a real panel power-state change, not just a
+    black frame. The daemon still runs as root (needed for the
+    backlight writes) but shells out to `su droidian` with the Wayland
+    runtime env set explicitly for the one action that needs droidian's
+    session.
+  * Two idle timeouts, both confirmed live with short test values before
+    landing on their real ones:
+    - Console session idle-logout (60s). r7-console-login no longer
+      `exec`s `su -` - it calls it normally so the wrapper is still alive
+      when the shell exits (idle timeout or a normal `exit`), and loops
+      back to the login prompt instead of tearing down the whole
+      phoc/waybar/OSK session. New /etc/profile.d/r7-console-idle-timeout.sh
+      sets bash's native TMOUT=60, scoped to the console only (skipped
+      when $SSH_CONNECTION is set, so SSH sessions are unaffected - an
+      idle SSH session is a different, already-covered threat model).
+      An on-bar countdown display was tried and then deliberately
+      dropped by request - the underlying timeout stayed.
+    - Display auto-off after 120s of no touch/button activity
+      (r7-hw-buttons, extended to also watch the touchscreen device via
+      select() alongside gpio_keys). Touch only resets the timer while
+      the display is already on - it deliberately does NOT wake the
+      display back up, matching normal phone behaviour where only the
+      power button wakes a screen-off device. Brightness needs no extra
+      "memory" handling for this: confirmed live it's untouched by a
+      decon power-mode cycle, and systemd-backlight@backlight:panel
+      already persists it across reboots.
 
- -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 19:00:00 +0300
-
-adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop3+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
-
-  * Replace wayfire with bare phoc as the r7-server console compositor
-    (adaptation-samsung-r7-desktop: Depends on phoc, not wayfire). Live
-    testing found an unfixed wayfire bug: on this wlroots 0.18 backport,
-    both xdg-shell and layer-shell surfaces are born "uninitialized," so
-    focus routing never reaches any client and touch lands nowhere -
-    confirmed with correlated evdev capture + wayfire log timing, ruled
-    out package version drift. phoc doesn't have this bug (it's the exact
-    compositor phosh runs on this device every day, with real working
-    touch) and needs no window-manager/decoration-plugin workarounds
-    wayfire did. New phoc-console.service (replaces wayfire-test.service)
-    passes phoc the stock /usr/share/phosh/phoc.ini unmodified - confirmed
-    live to render a correct upright portrait console with no changes
-    needed. New /usr/libexec/r7-console-session wraps foot + backgrounded
-    waybar, since -E takes exactly one command and phoc.ini has no
-    wayfire.ini-style [autostart] section. Dropped wayfire.ini (no longer
-    needed) and r7-switch-session (existed only to toggle phosh<->wayfire,
-    both gone from this fork - phosh via Conflicts, wayfire-test.service
-    deleted with this change).
-
- -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 18:30:00 +0300
+ -- Yunus Tan <yunus.tan@outlook.com.tr>  Tue, 11 Aug 2026 21:26:00 +0300
 
 adaptation-samsung-r7 (0.0.0+git20260720203123.c4c06d0.bookworm+git20260728092037.c349ebc.bookworm+r7spen1+r7dns1+r7setup3+r7ssh1+r7spenapp2+r7desktop2+r7usb1+r7ios1+r7vol1+r7log1+r7ssh2+r7phosh2+r7apt1) bookworm; urgency=medium
 
