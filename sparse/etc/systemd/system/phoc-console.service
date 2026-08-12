@@ -36,6 +36,20 @@ Environment=WLR_HWC_IDLE_TIME=12
 # no changes needed. -E takes exactly one command; r7-console-session is the
 # wrapper that also backgrounds waybar (phoc.ini has no [autostart] section
 # like wayfire.ini did).
+# Android's own graphics HAL (vendor.hwcomposer-2-2) doesn't reliably finish
+# registering before this unit's first start attempt - observed live
+# 2026-08-12 on a genuinely fresh flash: phoc started, ran, but never created
+# its Wayland socket because the HWC HAL wasn't there yet, and phoc doesn't
+# retry internally. Force a fresh HAL restart immediately before every
+# attempt (not just the first) rather than depending on some other unit's
+# completion signal, since android_boot_completed.service was also observed
+# to not reliably predict HAL readiness. "-+" ignores failure (still try to
+# start phoc even if setprop errors) and runs as root regardless of this
+# unit's own User=, matching the ExecStartPost chvt line below. Combined with
+# Restart=always/RestartSec=2, even a losing first race self-heals within
+# seconds instead of leaving a dead session forever.
+ExecStartPre=-+/usr/bin/setprop ctl.restart vendor.hwcomposer-2-2
+ExecStartPre=/bin/sleep 2
 ExecStart=/usr/bin/phoc -C /usr/share/phosh/phoc.ini -E /usr/libexec/r7-console-session
 # Activate the VT so the logind session becomes active on seat0 (phosh does chvt 7).
 ExecStartPost=+chvt 7

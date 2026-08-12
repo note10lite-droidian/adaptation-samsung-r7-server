@@ -1,3 +1,49 @@
+adaptation-samsung-r7 (1.0.1) bookworm; urgency=high
+
+  * Four boot-time bugs found on the first genuinely fresh flash of this
+    fork (2026-08-12) - none reachable by a warm reboot/update, only by a
+    real wipe+reflash, which is why they surfaced only now:
+    - SECURITY: the SSH hardening (password auth off, TOTP required) was
+      silently never applying. Root cause: adaptation-samsung-r7-configs's
+      postinst patched /etc/pam.d/sshd and /etc/ssh/sshd_config in place,
+      guarded by `[ -f ... ]` - but apt's install order inside the same
+      transaction doesn't guarantee openssh-server (which creates those
+      files) is configured before this postinst runs. When it loses that
+      race, the guard evaluates false and the whole block skips silently,
+      no error. Confirmed live: both files still carried their original
+      packaged mtime. Net effect: default OpenSSH password auth stayed
+      live, reachable over USB RNDIS, with the well-known default
+      password from the public install docs. Fixed by moving these
+      patches (plus the pre-existing camera-backend and ufw patches, same
+      root cause) out of postinst entirely into a new
+      r7-first-boot-hardening.service, ordered at actual boot time
+      (Before=ssh.service, After=local-fs.target) - by then every package
+      from the image build is guaranteed already unpacked, same reasoning
+      r7-regenerate-ssh-host-keys.service already relied on.
+    - phoc-console.service could start with no working display: Android's
+      own graphics HAL (vendor.hwcomposer-2-2) doesn't reliably finish
+      registering before phoc's first start attempt, and phoc doesn't
+      retry internally - it ran, but never created its Wayland socket.
+      Fixed with an ExecStartPre that force-restarts the HAL immediately
+      before every attempt (not just the first), rather than depending on
+      some other unit's completion signal (android_boot_completed.service
+      was also observed not to reliably predict HAL readiness).
+    - mtp-configfs@rndis.service could never leave "activating": it's
+      Type=oneshot upstream, but /usr/sbin/mtp-configfs's last command for
+      rndis mode is `dhcpd -f` (foreground, no & and no exec), so the
+      script's own process never exits. This blocked graphical.target's
+      own start job for the entire boot. Fixed with a
+      mtp-configfs@.service.d drop-in switching to Type=simple, which
+      matches what the script actually does (starts a process meant to
+      stay alive indefinitely) without touching the script itself (it
+      belongs to mtp-server, not this package).
+    - r7-disable-android-services's bounded watch-and-stop loop (40s) was
+      too short: ril-daemon started after the window had already given up
+      watching for it on this boot, so it ran unimpeded, pinning ~90% of a
+      CPU core for the rest of the session. Widened to 300s (still
+      self-terminating, not a permanent daemon) rather than made
+      unbounded.
+
 adaptation-samsung-r7 (1.0.0) bookworm; urgency=medium
 
   * Version reset to 1.0.0 for this fork specifically

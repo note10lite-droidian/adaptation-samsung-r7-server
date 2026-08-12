@@ -60,16 +60,15 @@ if [ "$1" = "configure" ]; then
     done
 fi
 
-# r7: camera backend. droidian-camera defaults to "aal", which is broken on
-# this device; "gst" works. The file is a CONFFILE of the droidian-camera
-# package, so it cannot be shipped via sparse/ (dpkg would fail with "trying
-# to overwrite"); patch it in place instead.
-CAMCONF=/etc/droidian-camera.conf
-if [ "$1" = "configure" ] && [ -f "$CAMCONF" ]; then
-    if grep -q '^backend=aal' "$CAMCONF"; then
-        sed -i 's/^backend=aal/backend=gst/' "$CAMCONF"
-    fi
-fi
+# r7: camera backend, ufw, and SSH-hardening conffile patches used to live
+# here, guarded by `[ -f ... ]`. Moved to r7-first-boot-hardening.service
+# (runs at actual boot time, not build time) - see that unit/script for why:
+# in short, apt's install order inside this SAME transaction doesn't
+# guarantee the OTHER packages owning those conffiles (openssh-server, ufw,
+# droidian-camera) are configured before this postinst runs, so the guards
+# could silently skip forever. Confirmed live 2026-08-12: the SSH hardening
+# silently never applied on a fresh flash, leaving default password auth
+# live. See r7-first-boot-hardening for the fix.
 
 # r7: compile the S-Pen (sec_e-pen) hwdb quirk. sparse/etc/udev/hwdb.d/61-sec-epen.hwdb
 # gives ABS_X/ABS_Y a resolution (libinput otherwise rejects the pen). The
@@ -200,41 +199,6 @@ if [ "$1" = "configure" ] && command -v journalctl >/dev/null 2>&1; then
     journalctl --flush 2>/dev/null || true
 fi
 
-# r7-server: SSH access is key + TOTP, no password auth at all.
-#
-# /etc/pam.d/sshd is a conffile of openssh-server (dpkg -S confirms it);
-# /etc/ssh/sshd_config isn't tracked by dpkg on this image at all, but
-# treated the same way regardless — same reasoning as the droidian-camera.conf
-# patch above: sparse/ can't ship either path without dpkg refusing to
-# overwrite (or, for sshd_config, without clobbering whatever generated it).
-# Patch in place instead, idempotently (grep-guarded, safe to run on every
-# package upgrade, not just first install).
-#
-# pam.d/sshd: swap @include common-auth (password check) for
-# pam_google_authenticator.so. `nullok` is required, not optional here: it's
-# what lets a brand new device boot without a chicken-and-egg lockout before
-# anyone has run `google-authenticator` yet. Once a user creates
-# ~/.google_authenticator, PAM starts requiring a valid code from them
-# specifically — nullok only bypasses the check when no secret file exists.
-if [ "$1" = "configure" ] && [ -f /etc/pam.d/sshd ]; then
-    if ! grep -q "pam_google_authenticator.so" /etc/pam.d/sshd; then
-        sed -i 's/^@include common-auth/#&\nauth       required     pam_google_authenticator.so nullok/' /etc/pam.d/sshd
-    fi
-fi
-
-# sshd_config: enable keyboard-interactive (carries the TOTP prompt), turn
-# off password auth explicitly (don't rely on the commented-out default),
-# and require both factors together rather than either one alone.
-if [ "$1" = "configure" ] && [ -f /etc/ssh/sshd_config ]; then
-    sed -i \
-        -e 's/^KbdInteractiveAuthentication no/KbdInteractiveAuthentication yes/' \
-        -e 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' \
-        /etc/ssh/sshd_config
-    if ! grep -q "^AuthenticationMethods" /etc/ssh/sshd_config; then
-        echo "AuthenticationMethods publickey,keyboard-interactive" >> /etc/ssh/sshd_config
-    fi
-fi
-
 # r7-server: authorize the owner's key for the droidian user (the same
 # account phoc-console.service runs as, so local console + SSH share one
 # identity). Public key only, safe to keep in source — this is the client
@@ -258,24 +222,18 @@ if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
     systemctl enable r7-disable-android-services.service || true
 fi
 
-# r7-server: ufw.service fails to start outright on this kernel -
-# confirmed live: "Extension rt revision 0 not supported, missing kernel
-# module?" / "ip6tables-restore: line 142 failed" / "Problem running
-# '/etc/ufw/before6.rules'". Root cause: ufw's default before6.rules
-# blocks legacy IPv6 Routing-Header-Type-0 packets via `-m rt --rt-type 0`,
-# needing the ip6t_rt/xt_rt netfilter match module, which this kernel
-# doesn't build. This is a genuine missing-module gap, not device state -
-# a fresh flash on the same kernel hits the identical failure, so it's
-# fixed here rather than left as a one-off live patch. Not pursuing the
-# kernel module for this alone: RH0 processing has been disabled by the
-# kernel's own IPv6 stack by default since ~2009 regardless of firewall
-# rules, so this specific ufw rule is redundant defense-in-depth, not a
-# load-bearing control - dropping it is a reasonable trade against
-# pulling in a kernel change this phase deliberately doesn't touch.
-# before6.rules is a conffile (owned by the ufw package), so it can't be
-# shipped via sparse/ - same sed-patch pattern as sshd_config below.
-if [ "$1" = "configure" ] && [ -f /etc/ufw/before6.rules ]; then
-    sed -i '/-m rt --rt-type 0/s/^-A/#-A/' /etc/ufw/before6.rules
+# r7-server: ufw's before6.rules patch (kernel lacks ip6t_rt/xt_rt) also
+# moved to r7-first-boot-hardening.service - see the postinst comment above
+# the camera-backend note for why.
+if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl enable r7-first-boot-hardening.service || true
+fi
+
+# Package upgrades on an already-running system (not just fresh flashes)
+# need this to pick up unit-file changes shipped via sparse/ - e.g. the
+# mtp-configfs@.service.d drop-in and phoc-console.service's ExecStartPre.
+if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
 fi
 
 #DEBHELPER#

@@ -43,8 +43,13 @@ gpsd
 sec_gnss_service
 "
 
+# 300s, not the original 40s: on a genuinely fresh flash 2026-08-12,
+# ril-daemon started after the old 40s window had already given up watching
+# for it, so it ran unimpeded (pinning ~90% of a CPU core) for the rest of
+# that boot. Widened rather than made unbounded, to stay a self-terminating
+# script rather than a permanent daemon.
 remaining="$SERVICES"
-for i in $(seq 1 40); do
+for i in $(seq 1 300); do
     still=""
     for svc in $remaining; do
         state=$(lxc-attach -n android -- getprop init.svc.$svc 2>/dev/null)

@@ -1,0 +1,67 @@
+#!/bin/sh
+# r7-server: patch conffiles owned by OTHER packages (openssh-server, ufw,
+# droidian-camera) that adaptation-samsung-r7-configs's postinst used to
+# patch directly, guarded only by `[ -f ... ]`.
+#
+# WHY THIS MOVED HERE: on a real image build, apt's install order inside the
+# SAME transaction is not guaranteed to configure openssh-server (which
+# creates /etc/ssh/sshd_config and /etc/pam.d/sshd) before
+# adaptation-samsung-r7-configs's own postinst runs. When that happens the
+# `[ -f ... ]` guards evaluate false and the whole block is skipped - GRACEFULLY
+# skipped, no error, no warning. Confirmed live 2026-08-12 on a genuinely fresh
+# flash: both files still carried their original packaged mtime, meaning the
+# SSH hardening (password auth off, TOTP required) had SILENTLY NEVER APPLIED,
+# leaving default OpenSSH password auth live and reachable over USB RNDIS with
+# the well-known default password from the public install docs. Running this
+# at actual boot time instead sidesteps the race entirely: by the time ANY
+# systemd unit runs on a booting system, every package from the image build is
+# already fully unpacked, so these files are guaranteed to exist. Same
+# reasoning r7-regenerate-ssh-host-keys.service already relies on.
+#
+# Every patch below is grep-guarded (safe/idempotent to rerun every boot),
+# so unlike the SSH host keys this isn't gated behind a one-time stamp file -
+# if a future package upgrade ever resets one of these conffiles to its
+# default, this just reapplies the patch on the next boot.
+set -eu
+
+changed=0
+
+# SSH: key + TOTP only, no password auth. nullok is required, not optional:
+# it's what lets a brand new device boot without a chicken-and-egg lockout
+# before anyone has run google-authenticator yet - nullok only bypasses the
+# check when no ~/.google_authenticator exists for that user.
+if [ -f /etc/pam.d/sshd ] && ! grep -q "pam_google_authenticator.so" /etc/pam.d/sshd; then
+    sed -i 's/^@include common-auth/#&\nauth       required     pam_google_authenticator.so nullok/' /etc/pam.d/sshd
+    changed=1
+fi
+
+if [ -f /etc/ssh/sshd_config ]; then
+    before=$(cat /etc/ssh/sshd_config)
+    sed -i \
+        -e 's/^KbdInteractiveAuthentication no/KbdInteractiveAuthentication yes/' \
+        -e 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' \
+        /etc/ssh/sshd_config
+    if ! grep -q "^AuthenticationMethods" /etc/ssh/sshd_config; then
+        echo "AuthenticationMethods publickey,keyboard-interactive" >> /etc/ssh/sshd_config
+    fi
+    [ "$before" = "$(cat /etc/ssh/sshd_config)" ] || changed=1
+fi
+
+# Camera backend: droidian-camera defaults to "aal", broken on this device.
+CAMCONF=/etc/droidian-camera.conf
+if [ -f "$CAMCONF" ] && grep -q '^backend=aal' "$CAMCONF"; then
+    sed -i 's/^backend=aal/backend=gst/' "$CAMCONF"
+fi
+
+# ufw: this kernel lacks the ip6t_rt/xt_rt netfilter match module that
+# before6.rules' RH0 rule needs - see the original postinst comment history
+# for the full root-cause writeup. RH0 has been disabled by the kernel's own
+# IPv6 stack by default since ~2009 regardless, so this is redundant
+# defense-in-depth, not a load-bearing control.
+if [ -f /etc/ufw/before6.rules ]; then
+    sed -i '/-m rt --rt-type 0/s/^-A/#-A/' /etc/ufw/before6.rules
+fi
+
+if [ "$changed" = 1 ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl restart ssh 2>/dev/null || true
+fi

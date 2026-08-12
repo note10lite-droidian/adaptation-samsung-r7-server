@@ -1,0 +1,15 @@
+[Unit]
+Description=r7-server: patch conffiles owned by other packages (SSH hardening, camera backend, ufw, sudoers mode)
+# Must finish before sshd binds, or a boot could briefly serve the
+# unhardened default config - same reasoning as r7-regenerate-ssh-host-keys.
+Before=ssh.service ssh.socket
+After=local-fs.target
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/r7-first-boot-hardening
+
+[Install]
+WantedBy=multi-user.target
