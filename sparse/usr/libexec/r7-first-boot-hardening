@@ -41,8 +41,22 @@ if [ -f /etc/ssh/sshd_config ]; then
         -e 's/^KbdInteractiveAuthentication no/KbdInteractiveAuthentication yes/' \
         -e 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' \
         /etc/ssh/sshd_config
+    # TEMPORARY: publickey-only, not "publickey,keyboard-interactive" -
+    # locked the owner out of their own fresh flash 2026-08-12. Root cause:
+    # pam_google_authenticator.so's nullok bypass (correct/documented
+    # behavior when no ~/.google_authenticator exists yet - see its own
+    # manpage) returns PAM success with ZERO conversation prompts, and
+    # sshd's keyboard-interactive exchange appears to treat a genuinely
+    # empty prompt list as a failed exchange rather than an accepted one -
+    # confirmed live (ssh -v showed "Authenticated using publickey with
+    # partial success" immediately followed by keyboard-interactive
+    # failing with no prompt ever sent, from a real interactive terminal,
+    # not just non-interactive tooling). Revisit once TOTP can actually be
+    # rolled out from a working session and the full flow re-tested with a
+    # real secret file in place (a real code exchange has actual prompts,
+    # which may sidestep this).
     if ! grep -q "^AuthenticationMethods" /etc/ssh/sshd_config; then
-        echo "AuthenticationMethods publickey,keyboard-interactive" >> /etc/ssh/sshd_config
+        echo "AuthenticationMethods publickey" >> /etc/ssh/sshd_config
     fi
     [ "$before" = "$(cat /etc/ssh/sshd_config)" ] || changed=1
 fi
@@ -62,6 +76,17 @@ if [ -f /etc/ufw/before6.rules ]; then
     sed -i '/-m rt --rt-type 0/s/^-A/#-A/' /etc/ufw/before6.rules
 fi
 
+# --no-block is required, not optional: this unit is Before=ssh.service
+# (so patches apply before ssh's first activation this boot), which means
+# ssh.service can't reach "active" until THIS unit's start job finishes.
+# A blocking `systemctl restart ssh` here would wait for ssh to become
+# active while ssh is simultaneously waiting for this unit to finish -
+# a guaranteed deadlock, confirmed live 2026-08-12 (ssh never came up at
+# all). On first boot this restart is redundant anyway (Before= already
+# guarantees clean config on ssh's first start) - it only matters for a
+# later boot where a package upgrade reset a conffile after ssh was
+# already active, and --no-block handles that without risking the same
+# deadlock even if ordering ever changes.
 if [ "$changed" = 1 ] && command -v systemctl >/dev/null 2>&1; then
-    systemctl restart ssh 2>/dev/null || true
+    systemctl restart --no-block ssh 2>/dev/null || true
 fi
