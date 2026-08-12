@@ -54,6 +54,7 @@ Depends: ${misc:Depends},
          usbmuxd,
          libpam-google-authenticator,
          oathtool,
+         libglib2.0-bin,
 Description: Community adaptation for samsung-r7 - adaptation configurations
  Pulls isc-dhcp-server for its dhcpd binary, invoked directly by mtp-server's
  mtp-configfs script to serve an IP over the USB RNDIS gadget (10.15.19.0/24,
@@ -67,6 +68,13 @@ Description: Community adaptation for samsung-r7 - adaptation configurations
  Mobile Device + Apple USB Ethernet), and ipheth (built into the kernel)
  binds the Ethernet interface from there - no adaptation-side wiring needed
  beyond having the package installed.
+ .
+ Pulls libglib2.0-bin for the gsettings CLI, which r7-spen-mode-daemon
+ shells out to. This used to arrive implicitly as part of the phosh
+ edition's dependency tree; the gsi_base edition this fork now builds on
+ does NOT pull it in, so it has to be declared. The same package provides
+ gdbus - whose absence silently broke the on-screen-keyboard toggle button
+ (exit 127 on every press) until that script was moved to busctl.
  .
  Pulls libpam-google-authenticator + oathtool for SSH TOTP 2FA
  (key + verification code, no password auth at all — see postinst for the
@@ -85,6 +93,7 @@ Depends: ${misc:Depends},
          python3-evdev,
          pamtester,
          wlopm,
+         feedbackd,
 Description: Community adaptation for samsung-r7-server - console session
  Default (only) desktop-shell session for the r7-server fork: bare phoc
  (no phosh shell) hosting foot as its single client, over the
@@ -94,6 +103,14 @@ Description: Community adaptation for samsung-r7-server - console session
  Requires=iio-sensor-proxy.service which doesn't exist in this image, so
  it simply never starts) but are no longer pulled in as a real
  dependency.
+ Pulls feedbackd for haptic feedback (the daemon that owns
+ org.sigxcpu.Feedback). phosh-osk-stub depends only on libfeedback, the
+ CLIENT library - without the daemon there is nothing on the bus to serve
+ the request, so keyboard vibration silently did nothing. Confirmed live
+ 2026-08-12: the vibrator hardware and kernel driver were fine all along
+ (isa1000_vibrator, /sys/class/timed_output/vibrator), only the daemon was
+ missing because the gsi_base edition does not pull it in.
+ .
  Notes: wayfire was tried first and dropped (2026-08-11) after live
  testing found an unfixed bug — wlroots 0.18-backport surfaces (both
  xdg-shell and layer-shell) are born "uninitialized," breaking focus

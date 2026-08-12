@@ -3,11 +3,29 @@
 # interface. foot (a terminal) doesn't do text-input-v3 field-focus like
 # GTK apps do, so the OSK never auto-shows for it - a manual waybar
 # button is the deliberate replacement for that automatic behavior.
-current="$(gdbus call --session --dest sm.puri.OSK0 --object-path /sm/puri/OSK0 \
-    --method org.freedesktop.DBus.Properties.Get sm.puri.OSK0 Visible 2>/dev/null)"
+#
+# Uses busctl (from systemd, therefore always present), NOT gdbus. gdbus
+# comes from libglib2.0-bin, which the phosh edition happened to pull in
+# but the gsi_base edition this fork now builds on does NOT - so the
+# original gdbus version of this script exited 127 (command not found) on
+# every press and the K button silently did nothing at all. Confirmed live
+# 2026-08-12; touch itself was fine, this script was the whole bug.
+#
+# Note SetVisible is a METHOD, not a writable property - setting the
+# Visible property directly fails with "Property Visible is not writable".
+set -eu
+
+: "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+: "${DBUS_SESSION_BUS_ADDRESS:=unix:path=${XDG_RUNTIME_DIR}/bus}"
+export XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS
+
+DEST=sm.puri.OSK0
+OBJ=/sm/puri/OSK0
+
+current="$(busctl --user get-property "$DEST" "$OBJ" "$DEST" Visible 2>/dev/null || echo "b false")"
 case "$current" in
     *true*) new=false ;;
-    *) new=true ;;
+    *)      new=true ;;
 esac
-gdbus call --session --dest sm.puri.OSK0 --object-path /sm/puri/OSK0 \
-    --method sm.puri.OSK0.SetVisible "$new" >/dev/null 2>&1
+
+busctl --user call "$DEST" "$OBJ" "$DEST" SetVisible b "$new" >/dev/null 2>&1 || true
