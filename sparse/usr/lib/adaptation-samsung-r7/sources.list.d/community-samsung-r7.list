@@ -1,14 +1,21 @@
 # You can add here your custom apt repositories
 
-# r7 (+r7apt1): this port's own patched-package overlay. Without this, any
-# apt operation (a background PackageKit refresh, a manual "check for
-# updates", or a plain `apt upgrade`) only sees the official Droidian repo,
-# which happily "upgrades" our patched phosh/clock/scale-persistence/etc.
-# packages back down to stock the moment a matching name exists there -
-# traced live 2026-08-09 after a user report that a system update reset the
-# clock-position fix, and confirmed by finding phosh.service back at its
-# stock Conflicts=getty@tty1.service (the black-screen-forever fix) on a
-# device that had supposedly shipped with it patched. Signed with the key at
-# /etc/apt/trusted.gpg.d/community-samsung-r7.gpg (this package ships it),
-# so no [trusted=yes] is needed.
-deb https://raw.githubusercontent.com/note10lite-droidian/droidian-samsung-r7/droidian-101/apt/ ./
+# r7-server (+r7apt1, corrected 2026-08-13): this fork's own patched-package
+# overlay. Without this, any apt operation (a background PackageKit refresh,
+# a manual "check for updates", or a plain `apt upgrade`) only sees the
+# official Droidian repo, which happily "upgrades" our patched packages back
+# down to stock the moment a matching name exists there. Signed with the key
+# at /etc/apt/trusted.gpg.d/community-samsung-r7.gpg (this package ships it,
+# same key shared with the phone edition), so no [trusted=yes] is needed.
+#
+# WAS pointed at note10lite-droidian/droidian-samsung-r7 (the PHONE edition's
+# own repo) - a straight copy-paste artifact from forking this package off
+# adaptation-samsung-r7, never corrected for the -server context. That repo
+# publishes its OWN, unrelated package also named
+# adaptation-samsung-r7-desktop (a real wayfire/fuzzel/wlr-randr desktop
+# session), pinned at priority 1100 - so it collided with and tried to
+# replace THIS fork's identically-named phoc-console package on every
+# `apt upgrade`, confirmed live 2026-08-13 (AutoRemover aborted trying to
+# resolve wayfire/fuzzel/wlr-randr deps that have nothing to do with this
+# fork). Corrected to point at this fork's own repo instead.
+deb https://raw.githubusercontent.com/note10lite-droidian/droidian-samsung-r7-server/droidian-101/apt/ ./
