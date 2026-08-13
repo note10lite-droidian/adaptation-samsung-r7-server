@@ -1,15 +1,24 @@
 # r7-server: permanently disable Android vendor HAL/app services this
 # project doesn't need (telephony, gatekeeper, vaultkeeper/TEE, media
-# codec, light HAL), by redefining each service with `override` so this
-# later-parsed definition replaces the original from its own .rc file,
-# pointed at a nonexistent binary so even an explicit `start` trigger
-# elsewhere can't bring it up. Same convention as the existing
-# init.time_daemon_disabled.rc in this same overlay directory.
+# codec, light HAL, engineering mode), by redefining each service with
+# `override` so this later-parsed definition replaces the original from
+# its own .rc file, pointed at a nonexistent binary so even an explicit
+# `start` trigger elsewhere can't bring it up. Same convention as the
+# existing init.time_daemon_disabled.rc in this same overlay directory.
 #
 # Replaces the old start-then-stop r7-disable-android-services.service
 # workaround (which never actually stopped any of these on this kernel/
 # build combination - confirmed live 2026-08-13, all ten stayed
 # continuously "running" through its full 5-minute wait/retry window).
+#
+# class core/early_hal services go in ONE AT A TIME here (each proven
+# individually first via its own probe-file + reboot test before being
+# folded in) - see GUNLUK.md G2.3 for why: disabling 5 of them together
+# in an earlier "batch 2" attempt silently stalled apexd's own init
+# trigger chain and crash-looped phoc forever. vaultkeeper/vaultkeeper_hal
+# (below) were part of the original batch-1 group (not individually
+# isolated, but proven fine together); emservice was individually
+# tested and confirmed not to be the culprit.
 
 service vendor.gatekeeper-1-0 /vendor/bin/hw/android.hardware.gatekeeper@1.0-service_HYBRIS_DISABLED
     class hal
@@ -37,6 +46,16 @@ service samsung-software-media-c2-hal-1-0 /vendor/bin/hw/samsung.software.media.
 
 service vendor.samsung.hardware.light-default /vendor/bin/hw/vendor.samsung.hardware.light-service_HYBRIS_DISABLED
     class hal
+    disabled
+    oneshot
+    override
+
+# emservice - Samsung engineering-mode service (*#0*# style diagnostics).
+# class core, individually probe-tested 2026-08-13: apexd's trigger
+# chain still completed fine, phoc came up clean (0 restarts). Not the
+# apexd-stall culprit.
+service emservice /vendor/bin/emservice_HYBRIS_DISABLED
+    class core
     disabled
     oneshot
     override
