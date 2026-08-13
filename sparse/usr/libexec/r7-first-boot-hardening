@@ -50,6 +50,22 @@ if [ -f /etc/ufw/before6.rules ]; then
     sed -i '/-m rt --rt-type 0/s/^-A/#-A/' /etc/ufw/before6.rules
 fi
 
+# lxc-net.service: the `lxc` package's generic lxcbr0 NAT-bridge setup.
+# Fails on this device anyway (kernel has no MASQUERADE netfilter target -
+# not a routing/gateway kernel), but that's moot: the android LXC container
+# has zero `lxc.network.*` directives in its config (it shares the host
+# network namespace directly - RNDIS/WiFi are host interfaces), so nothing
+# on this device was ever going to use lxcbr0. Confirmed live 2026-08-13 -
+# see GUNLUK.md. Flip the package default off instead of just masking the
+# failing unit, so it stops trying at all.
+LXCNETDEF=/etc/default/lxc-net
+if [ -f "$LXCNETDEF" ] && grep -q '^USE_LXC_BRIDGE="true"' "$LXCNETDEF"; then
+    sed -i 's/^USE_LXC_BRIDGE="true"/USE_LXC_BRIDGE="false"/' "$LXCNETDEF"
+fi
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl disable --now lxc-net.service 2>/dev/null || true
+fi
+
 # --no-block is required, not optional: this unit is Before=ssh.service
 # (so patches apply before ssh's first activation this boot), which means
 # ssh.service can't reach "active" until THIS unit's start job finishes.
