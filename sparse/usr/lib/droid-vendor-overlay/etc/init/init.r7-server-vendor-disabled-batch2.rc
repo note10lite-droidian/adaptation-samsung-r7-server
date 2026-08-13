@@ -1,0 +1,167 @@
+# r7-server: batch 2 of permanently-disabled Android vendor services -
+# telephony/modem, GNSS, NFC, biometrics (face/fingerprint), camera,
+# media codec/DRM, sensors, vibrator, and sysinput/hyper misc daemons
+# with no server relevance. Same convention as
+# init.r7-server-vendor-disabled.rc (batch 1) and the upstream
+# init.time_daemon_disabled.rc precedent.
+#
+# IMPORTANT: every real `service NAME` here was read directly from its
+# source .rc file - the `ps` process name and the property/getprop name
+# frequently do NOT match the actual init service name (e.g. `argosd` the
+# process is service `argos-daemon`; `cbd` is service `cpboot-daemon`;
+# the GNSS HAL binary registers as `sec_gnss_service`; fingerprint is
+# `vendor.fps_hal`; media.codec is `vendor.media.omx`). Guessing from
+# process names would silently fail - confirmed painfully with ril-daemon
+# in batch 1, so every name below was verified against source before
+# being added here.
+#
+# None of these originals carry `override` themselves (checked before
+# writing this file), so - unlike ril-daemon - there's no parse-order
+# landmine.
+#
+# DELIBERATELY EXCLUDES 5 class core/early_hal services that were in an
+# earlier version of this file (mobicore, emservice [core]; engmode_hal,
+# hdcp_hal, proca [early_hal]): disabling all 5 together (as part of a
+# 22-service batch) silently stalled Android init's boot trigger chain
+# before it ever reached `starting service 'apexd'` - apexd never ran,
+# its runtime APEX bind-mount (bionic libc.so) never got replicated to
+# the host, and phoc crash-looped forever (SEGV, "library libc.so not
+# found") - confirmed live 2026-08-13 via the persistent journal, see
+# GUNLUK.md G2.3. Note batch 1 already proves NOT every class core/
+# early_hal service is unsafe (vaultkeeper is class core, vaultkeeper_hal
+# is class early_hal, both landed and verified fine) - so this isn't a
+# blanket "core/early_hal is dangerous" rule, just an unproven-safe one.
+# These 5 need to go back in one at a time, each with its own reboot
+# verification, before being added to any batch file.
+#
+# A few of these were already `disabled` upstream with their own
+# explicit `start`/lazy-HAL trigger (nfc_hal_service) - `disabled` alone
+# wasn't enough to stop them actually running (confirmed live: it was
+# "running" pre-fix), because something elsewhere still explicitly
+# starts it. The binary-path redirect here makes even an explicit
+# `start` a harmless failed exec.
+
+# Telephony/modem
+service cpboot-daemon /vendor/bin/cbd_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override
+
+# GNSS/location
+service lhd /vendor/bin/hw/lhd_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override
+
+service gpsd /vendor/bin/hw/gps.sh_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override
+
+service argos-daemon /vendor/bin/argosd_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override
+
+service sec_gnss_service /vendor/bin/hw/vendor.samsung.hardware.gnss@2.0-service_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override
+
+# NFC
+service nfc_hal_service /vendor/bin/hw/nxp.android.hardware.nfc@1.1-service_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+# Biometrics
+service sec-biometrics-face-aidl /vendor/bin/hw/vendor.samsung.hardware.biometrics.face-service_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+service vendor.fps_hal /vendor/bin/hw/vendor.samsung.hardware.biometrics.fingerprint@3.0-service_HYBRIS_DISABLED
+    class late_start
+    disabled
+    oneshot
+    override
+
+# Camera
+service sec-camera-provider-4-0 /vendor/bin/hw/vendor.samsung.hardware.camera.provider@4.0-service_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+# Media codec / DRM
+service vendor.media.omx /vendor/bin/hw/android.hardware.media.omx@1.0-service_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override
+
+service vendor.drm-widevine-hal-1-3 /vendor/bin/hw/android.hardware.drm@1.3-service.widevine_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+service vendor.drm-clearkey-hal-1-4 /vendor/bin/hw/android.hardware.drm@1.4-service.clearkey_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+# Sensors
+service vendor.sensors-hal-2-0-multihal /vendor/bin/hw/android.hardware.sensors@2.0-service.multihal_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+# Samsung security misc - drk (DRM Recovery Key) is class hal, not
+# core/early_hal like its excluded siblings above, so it's grouped here
+# instead.
+service drk_hal /vendor/bin/hw/vendor.samsung.hardware.security.drk@2.0-service_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+# Vibrator - purely haptic, zero server relevance
+service sec-vibrator-2-2 /vendor/bin/hw/vendor.samsung.hardware.vibrator@2.2-service_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+# sysinput - Android-side input HAL for touchscreen/S-Pen. The same
+# .rc file ALSO does chown/chmod permission setup for those input
+# devices via separate `on early-boot`/`on boot` triggers - this
+# override only replaces the `service` block, so that permission setup
+# is untouched and still runs. Host-level libinput reads touch/pen
+# directly from the kernel evdev nodes (same pattern as r7-hw-buttons
+# for volume/power), not through this Android HAL - but flagged for
+# explicit post-deploy verification given how central touch/pen input
+# is, unlike the other lower-stakes entries in this file.
+service sec-sysinput-1-3 /vendor/bin/hw/vendor.samsung.hardware.sysinput@1.3-service_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+# hyper-service - unclear exact Samsung feature, no apparent server
+# relevance; also flagged for post-deploy verification since its
+# purpose wasn't fully confirmed.
+service vendor.samsung.hardware.hyper-default /vendor/bin/hw/vendor.samsung.hardware.hyper-service_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
