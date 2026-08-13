@@ -1,0 +1,42 @@
+# r7-server: permanently disable Android vendor HAL/app services this
+# project doesn't need (telephony, gatekeeper, vaultkeeper/TEE, media
+# codec, light HAL), by redefining each service with `override` so this
+# later-parsed definition replaces the original from its own .rc file,
+# pointed at a nonexistent binary so even an explicit `start` trigger
+# elsewhere can't bring it up. Same convention as the existing
+# init.time_daemon_disabled.rc in this same overlay directory.
+#
+# Replaces the old start-then-stop r7-disable-android-services.service
+# workaround (which never actually stopped any of these on this kernel/
+# build combination - confirmed live 2026-08-13, all ten stayed
+# continuously "running" through its full 5-minute wait/retry window).
+
+service vendor.gatekeeper-1-0 /vendor/bin/hw/android.hardware.gatekeeper@1.0-service_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+service vaultkeeper /vendor/bin/vaultkeeperd_HYBRIS_DISABLED
+    class core
+    disabled
+    oneshot
+    override
+
+service vaultkeeper_hal /vendor/bin/vendor.samsung.hardware.security.vaultkeeper@2.0-service_HYBRIS_DISABLED
+    class early_hal
+    disabled
+    oneshot
+    override
+
+service samsung-software-media-c2-hal-1-0 /vendor/bin/hw/samsung.software.media.c2@1.0-service_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override
+
+service vendor.samsung.hardware.light-default /vendor/bin/hw/vendor.samsung.hardware.light-service_HYBRIS_DISABLED
+    class hal
+    disabled
+    oneshot
+    override

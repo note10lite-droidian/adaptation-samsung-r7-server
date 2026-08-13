@@ -175,15 +175,6 @@ if [ "$1" = "configure" ] && [ -d /home/droidian ]; then
     chown droidian:droidian /home/droidian/.ssh/authorized_keys
 fi
 
-# r7-server: stop the Android-side HAL/app services this image doesn't use
-# (camera, biometrics, NFC, media framework, telephony, GNSS) - see
-# usr/libexec/r7-disable-android-services for the full list and the
-# start-then-stop limitation this has until a kernel-level pass removes
-# the drivers outright.
-if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
-    systemctl enable r7-disable-android-services.service || true
-fi
-
 # r7-server: ufw's before6.rules patch (kernel lacks ip6t_rt/xt_rt) also
 # moved to r7-first-boot-hardening.service - see the postinst comment above
 # the camera-backend note for why.

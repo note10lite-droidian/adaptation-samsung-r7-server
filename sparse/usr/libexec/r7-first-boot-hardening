@@ -26,40 +26,14 @@ set -eu
 
 changed=0
 
-# SSH: key + TOTP only, no password auth. nullok is required, not optional:
-# it's what lets a brand new device boot without a chicken-and-egg lockout
-# before anyone has run google-authenticator yet - nullok only bypasses the
-# check when no ~/.google_authenticator exists for that user.
-if [ -f /etc/pam.d/sshd ] && ! grep -q "pam_google_authenticator.so" /etc/pam.d/sshd; then
-    sed -i 's/^@include common-auth/#&\nauth       required     pam_google_authenticator.so nullok/' /etc/pam.d/sshd
-    changed=1
-fi
-
-if [ -f /etc/ssh/sshd_config ]; then
-    before=$(cat /etc/ssh/sshd_config)
-    sed -i \
-        -e 's/^KbdInteractiveAuthentication no/KbdInteractiveAuthentication yes/' \
-        -e 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' \
-        /etc/ssh/sshd_config
-    # TEMPORARY: publickey-only, not "publickey,keyboard-interactive" -
-    # locked the owner out of their own fresh flash 2026-08-12. Root cause:
-    # pam_google_authenticator.so's nullok bypass (correct/documented
-    # behavior when no ~/.google_authenticator exists yet - see its own
-    # manpage) returns PAM success with ZERO conversation prompts, and
-    # sshd's keyboard-interactive exchange appears to treat a genuinely
-    # empty prompt list as a failed exchange rather than an accepted one -
-    # confirmed live (ssh -v showed "Authenticated using publickey with
-    # partial success" immediately followed by keyboard-interactive
-    # failing with no prompt ever sent, from a real interactive terminal,
-    # not just non-interactive tooling). Revisit once TOTP can actually be
-    # rolled out from a working session and the full flow re-tested with a
-    # real secret file in place (a real code exchange has actual prompts,
-    # which may sidestep this).
-    if ! grep -q "^AuthenticationMethods" /etc/ssh/sshd_config; then
-        echo "AuthenticationMethods publickey" >> /etc/ssh/sshd_config
-    fi
-    [ "$before" = "$(cat /etc/ssh/sshd_config)" ] || changed=1
-fi
+# SSH hardening (password auth off, publickey-only, TOTP via PAM) used to
+# live here and was REMOVED (2026-08-13, user decision): it locked the
+# owner out of their own device (see the now-deleted TEMPORARY note this
+# block used to carry, from the 2026-08-12 lockout) and conflicts with the
+# project's raspi-config-style onboarding model, where SSH must work with
+# the documented default password out of the box. If SSH hardening is
+# wanted again later, it belongs in an opt-in droidian-config module, not
+# forced unconditionally on every boot.
 
 # Camera backend: droidian-camera defaults to "aal", broken on this device.
 CAMCONF=/etc/droidian-camera.conf

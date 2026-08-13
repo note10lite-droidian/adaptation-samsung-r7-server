@@ -1,0 +1,23 @@
+# r7-server: disable ril-daemon. Separate file from
+# init.r7-server-vendor-disabled.rc and DELIBERATELY named to sort
+# alphabetically after vendor.sem.rilchip.rc.
+#
+# Why: Android init resolves duplicate `service NAME` definitions by
+# letting the LAST-PARSED one that carries `override` win, regardless
+# of whether the earlier one also had override. vendor.sem.rilchip.rc's
+# own ril-daemon definition already carries `override` (it's designed
+# to override a generic AOSP stub), and it sorts after
+# "init.r7-server-vendor-disabled.rc" alphabetically - so when
+# ril-daemon's disable lived in that file, the real vendor.sem.rilchip.rc
+# definition was parsed second and won, silently undoing the override
+# (confirmed live 2026-08-13: every other service in that batch was
+# correctly suppressed, only ril-daemon stayed running). Every other
+# service in the batch file has an original definition WITHOUT
+# `override`, so this ordering issue is unique to ril-daemon - a later
+# non-override duplicate is simply rejected by init, no naming trick
+# needed there.
+service ril-daemon /vendor/bin/hw/rild_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override

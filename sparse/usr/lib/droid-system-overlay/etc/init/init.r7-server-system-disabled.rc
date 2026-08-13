@@ -1,0 +1,47 @@
+# r7-server: permanently disable Android system-side media/security
+# services this project doesn't need. Same convention as the existing
+# /system/etc/init/init.disabled.rc (upstream Dreemurrs Embedded Labs
+# file) - see that file for the original pattern this follows.
+#
+# Requires /usr/lib/droid-system-overlay to exist so mount-android.sh
+# mounts the system overlay at all (conditional - it's a no-op if the
+# directory is absent, which is why this project had no system overlay
+# until now, unlike /usr/lib/droid-vendor-overlay which already existed).
+
+service gatekeeperd /system/bin/gatekeeperd_HYBRIS_DISABLED
+    class late_start
+    disabled
+    oneshot
+    override
+
+service mediaextractor /system/bin/mediaextractor_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override
+
+service mediametrics /system/bin/mediametrics_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override
+
+service minimedia /system/bin/minimediaservice_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override
+
+# EXPERIMENTAL: media.swcodec is defined inside an APEX module
+# (/system/apex/com.android.media.swcodec/etc/mediaswcodec.rc). This
+# override only takes effect if this device runs it as a "flattened"
+# APEX read directly from /system at runtime rather than loop-mounted
+# separately by apexd - unconfirmed either way. If it's the latter,
+# this override is a harmless no-op (the real running copy is
+# untouched) rather than something that could break anything - verify
+# with `getprop init.svc.media.swcodec` after reboot like the rest.
+service media.swcodec /apex/com.android.media.swcodec/bin/mediaswcodec_HYBRIS_DISABLED
+    class main
+    disabled
+    oneshot
+    override
