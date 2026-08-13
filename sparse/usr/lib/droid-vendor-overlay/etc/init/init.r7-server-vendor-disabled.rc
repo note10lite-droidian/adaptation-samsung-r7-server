@@ -78,3 +78,23 @@ service hdcp_hal /vendor/bin/vendor.samsung.hardware.security.hdcp.wifidisplay-s
     disabled
     oneshot
     override
+
+# proca (Process Certificate Authority) - Samsung runtime process
+# integrity/signature verification. class early_hal, individually
+# probe-tested 2026-08-13: apexd's trigger chain still completed fine,
+# phoc came up clean (0 restarts). Not the apexd-stall culprit.
+#
+# mobicore (McDriverDaemon, class core) IS confirmed to be the culprit -
+# disabling it alone reproduces the exact same apexd-never-starts /
+# phoc-SEGV-loop signature as the original 5-service "batch 2" (see
+# GUNLUK.md G2.3/G2.4) and hangs the device requiring manual TWRP
+# recovery. mobicore stays permanently excluded - do NOT add it here.
+# Likely explanation (unconfirmed): vendor.trustonic.tee@1.1-service,
+# which this project deliberately KEEPS, is the Trustonic <t-base> TEE
+# HAL and probably depends on mobicore/McDriverDaemon as its driver
+# daemon - something in that dependency chain blocks apexd.
+service proca /vendor/bin/vendor.samsung.hardware.security.proca@2.0-service_HYBRIS_DISABLED
+    class early_hal
+    disabled
+    oneshot
+    override
