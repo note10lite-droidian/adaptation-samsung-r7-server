@@ -10,6 +10,6 @@
 # button toggle) - this fires purely on absence of terminal input,
 # independent of whether the screen happens to be on or off.
 if [ -z "$SSH_CONNECTION" ]; then
-    TMOUT=60
+    TMOUT=300
     export TMOUT
 fi
