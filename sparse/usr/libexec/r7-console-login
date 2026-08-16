@@ -32,6 +32,15 @@ read_password() {
 }
 
 while true; do
+    # Defensive: whatever ran in the previous session (or the TMOUT
+    # kill itself, via the SIGHUP it sends the foreground job) may have
+    # left this tty in a broken state -- e.g. non-blocking raw mode,
+    # which turns the read below into a tight empty-read spin that
+    # floods the screen with this prompt instead of waiting for real
+    # input. Confirmed live as the root cause of exactly that symptom
+    # with pcs-health before it trapped HUP. Reset unconditionally so
+    # this loop can't be taken down by a future program's bug either.
+    stty sane 2>/dev/null
     printf 'r7 console login: '
     read -r username
     [ -n "$username" ] || continue
